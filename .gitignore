@@ -38,4 +38,4 @@ dist/d9-manager-test*
 
 # Cache
 .cache/
-deno.lock
+deno.lockdist/
