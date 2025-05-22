@@ -11,24 +11,6 @@ A comprehensive CLI tool for managing D9 blockchain nodes with zero-friction ins
 curl -L https://github.com/D-Nine-Chain/d9-manager/releases/latest/download/d9-manager-linux-x64.gz | gunzip > d9-manager && chmod +x d9-manager && sudo mv d9-manager /usr/local/bin/
 ```
 
-### Linux (ARM64)
-```bash
-curl -L https://github.com/D-Nine-Chain/d9-manager/releases/latest/download/d9-manager-linux-arm64.gz | gunzip > d9-manager && chmod +x d9-manager && sudo mv d9-manager /usr/local/bin/
-```
-
-### macOS (Apple Silicon - M1/M2)
-```bash
-curl -L https://github.com/D-Nine-Chain/d9-manager/releases/latest/download/d9-manager-macos-arm64.gz | gunzip > d9-manager && chmod +x d9-manager && sudo mv d9-manager /usr/local/bin/
-```
-
-### macOS (Intel)
-```bash
-curl -L https://github.com/D-Nine-Chain/d9-manager/releases/latest/download/d9-manager-macos-x64.gz | gunzip > d9-manager && chmod +x d9-manager && sudo mv d9-manager /usr/local/bin/
-```
-
-### Windows
-Download `d9-manager-windows-x64.zip` from the [releases page](https://github.com/D-Nine-Chain/d9-manager/releases/latest), extract, and run.
-
 Then simply run:
 ```bash
 d9-manager
@@ -142,7 +124,7 @@ d9-manager
    ```bash
    # Check service logs
    journalctl -u d9-node.service -n 50
-   
+
    # Check service status
    sudo systemctl status d9-node.service
    ```

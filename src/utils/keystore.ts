@@ -47,14 +47,44 @@ export async function readKeystoreInfo(): Promise<KeystoreInfo | null> {
 		// Parse the key data
 		let secretKey: string;
 		if (keyData.startsWith("0x")) {
-			// Hex key
+			// Hex key - check for derivation path
 			secretKey = keyData;
 		} else if (keyData.includes(" ")) {
-			// Mnemonic
-			if (!mnemonicValidate(keyData)) {
-				throw new Error("Invalid mnemonic");
+			// Mnemonic - check for derivation path
+			const parts = keyData.split("//");
+			if (parts.length > 1) {
+				// Has hard derivation path
+				const mnemonic = parts[0].trim();
+				if (!mnemonicValidate(mnemonic)) {
+					throw new Error("Invalid mnemonic");
+				}
+				secretKey = keyData; // Keep full URI with derivation
+			} else {
+				// Check for soft derivation
+				const softParts = keyData.split("/");
+				if (softParts.length > 1 && !softParts[0].includes(" ")) {
+					// Might be derivation without mnemonic, check if first part is mnemonic
+					const mnemonic = softParts[0].trim();
+					if (mnemonicValidate(mnemonic)) {
+						secretKey = keyData; // Keep full URI with soft derivation
+					} else {
+						throw new Error("Invalid mnemonic with derivation");
+					}
+				} else if (softParts.length > 1) {
+					// Mnemonic with soft derivation
+					const mnemonicPart = softParts.slice(0, -1).join("/").trim();
+					if (!mnemonicValidate(mnemonicPart)) {
+						throw new Error("Invalid mnemonic");
+					}
+					secretKey = keyData; // Keep full URI
+				} else {
+					// Just mnemonic
+					if (!mnemonicValidate(keyData)) {
+						throw new Error("Invalid mnemonic");
+					}
+					secretKey = keyData;
+				}
 			}
-			secretKey = keyData;
 		} else {
 			throw new Error("Invalid key format");
 		}

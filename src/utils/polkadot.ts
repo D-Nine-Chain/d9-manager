@@ -163,10 +163,15 @@ class D9ChainAPI {
       // Remove Dn prefix if present
       const cleanAddress = address.startsWith('Dn') ? address.slice(2) : address;
       
-      const candidateInfo = await this.api!.query.d9NodeVoting.candidates(cleanAddress);
+      const votes = await this.api!.query.d9NodeVoting.nodeAccumulativeVotes(cleanAddress);
+      
+      // If votes is null or not a number, they're not a candidate
+      // If votes exists (is a number), they already have candidacy
+      const isCandidate = votes && !votes.isEmpty;
+      
       return {
-        isCandidate: !candidateInfo.isEmpty,
-        metadata: candidateInfo.isEmpty ? undefined : candidateInfo.toJSON()
+        isCandidate,
+        metadata: isCandidate ? votes.toJSON() : undefined
       };
     } catch (error) {
       console.error('Error checking candidacy status:', error);
