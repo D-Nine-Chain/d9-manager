@@ -8,7 +8,7 @@ A comprehensive CLI tool for managing D9 blockchain nodes with zero-friction ins
 
 ### Linux (x86_64)
 ```bash
-curl -L https://github.com/D-Nine-Chain/d9-manager/releases/latest/download/d9-manager-linux-x64.gz | gunzip > d9-manager && chmod +x d9-manager && sudo mv d9-manager /usr/local/bin/
+curl -L https://github.com/D-Nine-Chain/d9-manager/releases/latest/download/d9-manager-linux-x64.gz | gunzip > d9-manager && chmod +x d9-manager
 ```
 
 Then simply run:
