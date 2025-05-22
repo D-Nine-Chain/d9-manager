@@ -46,47 +46,6 @@ jobs:
           src/main.ts
         gzip -c ./dist/d9-manager-linux-x64 > ./dist/d9-manager-linux-x64.gz
 
-    - name: Build Linux ARM64
-      run: |
-        deno compile \
-          --allow-all \
-          --no-check \
-          --target aarch64-unknown-linux-gnu \
-          --output ./dist/d9-manager-linux-arm64 \
-          src/main.ts
-        gzip -c ./dist/d9-manager-linux-arm64 > ./dist/d9-manager-linux-arm64.gz
-
-    - name: Build macOS x64
-      run: |
-        deno compile \
-          --allow-all \
-          --no-check \
-          --target x86_64-apple-darwin \
-          --output ./dist/d9-manager-macos-x64 \
-          src/main.ts
-        gzip -c ./dist/d9-manager-macos-x64 > ./dist/d9-manager-macos-x64.gz
-
-    - name: Build macOS ARM64
-      run: |
-        deno compile \
-          --allow-all \
-          --no-check \
-          --target aarch64-apple-darwin \
-          --output ./dist/d9-manager-macos-arm64 \
-          src/main.ts
-        gzip -c ./dist/d9-manager-macos-arm64 > ./dist/d9-manager-macos-arm64.gz
-
-    - name: Build Windows x64
-      run: |
-        deno compile \
-          --allow-all \
-          --no-check \
-          --target x86_64-pc-windows-msvc \
-          --output ./dist/d9-manager-windows-x64.exe \
-          src/main.ts
-        sudo apt-get update && sudo apt-get install -y zip
-        zip ./dist/d9-manager-windows-x64.zip ./dist/d9-manager-windows-x64.exe
-
     - name: Generate checksums
       run: |
         cd dist
@@ -108,26 +67,11 @@ jobs:
           ## D9 Manager ${{ steps.get_version.outputs.VERSION }}
           
           ### 📦 Downloads
-          Choose the binary for your system:
+          - `d9-manager-linux-x64.gz` - For Linux x86_64 systems
           
-          **Linux:**
-          - `d9-manager-linux-x64.gz` - For x86_64 systems (Intel/AMD)
-          - `d9-manager-linux-arm64.gz` - For ARM64 systems
-          
-          **macOS:**
-          - `d9-manager-macos-x64.gz` - For Intel Macs
-          - `d9-manager-macos-arm64.gz` - For Apple Silicon Macs (M1/M2)
-          
-          **Windows:**
-          - `d9-manager-windows-x64.zip` - For 64-bit Windows
-          
-          ### 🚀 Quick Install (Linux/macOS)
+          ### 🚀 Quick Install
           ```bash
-          # Linux x64
           curl -L https://github.com/D-Nine-Chain/d9-manager/releases/download/${{ steps.get_version.outputs.VERSION }}/d9-manager-linux-x64.gz | gunzip > d9-manager && chmod +x d9-manager && sudo mv d9-manager /usr/local/bin/
-          
-          # macOS ARM64 (M1/M2)
-          curl -L https://github.com/D-Nine-Chain/d9-manager/releases/download/${{ steps.get_version.outputs.VERSION }}/d9-manager-macos-arm64.gz | gunzip > d9-manager && chmod +x d9-manager && sudo mv d9-manager /usr/local/bin/
           ```
           
           ### ✨ Features
@@ -151,46 +95,6 @@ jobs:
         asset_path: ./dist/d9-manager-linux-x64.gz
         asset_name: d9-manager-linux-x64.gz
         asset_content_type: application/gzip
-
-    - name: Upload Linux ARM64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/d9-manager-linux-arm64.gz
-        asset_name: d9-manager-linux-arm64.gz
-        asset_content_type: application/gzip
-
-    - name: Upload macOS x64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/d9-manager-macos-x64.gz
-        asset_name: d9-manager-macos-x64.gz
-        asset_content_type: application/gzip
-
-    - name: Upload macOS ARM64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/d9-manager-macos-arm64.gz
-        asset_name: d9-manager-macos-arm64.gz
-        asset_content_type: application/gzip
-
-    - name: Upload Windows x64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/d9-manager-windows-x64.zip
-        asset_name: d9-manager-windows-x64.zip
-        asset_content_type: application/zip
 
     - name: Upload checksums
       uses: actions/upload-release-asset@v1
