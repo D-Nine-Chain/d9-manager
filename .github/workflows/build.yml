@@ -16,14 +16,6 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             name: linux-x64
-          - target: aarch64-unknown-linux-gnu  
-            name: linux-arm64
-          - target: x86_64-apple-darwin
-            name: macos-x64
-          - target: aarch64-apple-darwin
-            name: macos-arm64
-          - target: x86_64-pc-windows-msvc
-            name: windows-x64
 
     steps:
     - name: Checkout code
@@ -55,15 +47,8 @@ jobs:
           --output ./dist/d9-manager-${{ matrix.name }} \
           src/main.ts
 
-    - name: Compress binary (Linux/macOS)
-      if: matrix.target != 'x86_64-pc-windows-msvc'
+    - name: Compress binary
       run: gzip -c ./dist/d9-manager-${{ matrix.name }} > ./dist/d9-manager-${{ matrix.name }}.gz
-
-    - name: Compress binary (Windows)
-      if: matrix.target == 'x86_64-pc-windows-msvc'
-      run: |
-        sudo apt-get update && sudo apt-get install -y zip
-        zip ./dist/d9-manager-${{ matrix.name }}.zip ./dist/d9-manager-${{ matrix.name }}
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
