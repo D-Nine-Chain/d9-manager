@@ -66,7 +66,7 @@ jobs:
         zip ./dist/d9-manager-${{ matrix.name }}.zip ./dist/d9-manager-${{ matrix.name }}.exe
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: d9-manager-${{ matrix.name }}
         path: |
