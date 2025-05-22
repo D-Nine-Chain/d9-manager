@@ -1,0 +1,23 @@
+{
+  "name": "d9-manager",
+  "version": "1.0.0",
+  "exports": "./src/main.ts",
+  "tasks": {
+    "dev": "deno run --allow-all src/main.ts",
+    "build": "./build.sh",
+    "compile": "deno compile --allow-all --output ./dist/d9-manager src/main.ts"
+  },
+  "imports": {
+    "@cliffy/command": "https://deno.land/x/cliffy@v1.0.0-rc.4/command/mod.ts",
+    "@cliffy/prompt": "https://deno.land/x/cliffy@v1.0.0-rc.4/prompt/mod.ts",
+    "@cliffy/ansi": "https://deno.land/x/cliffy@v1.0.0-rc.4/ansi/mod.ts",
+    "@polkadot/api": "https://esm.sh/@polkadot/api@10.11.2",
+    "@polkadot/keyring": "https://esm.sh/@polkadot/keyring@12.6.2",
+    "@polkadot/util": "https://esm.sh/@polkadot/util@12.6.2",
+    "@polkadot/util-crypto": "https://esm.sh/@polkadot/util-crypto@12.6.2"
+  },
+  "compilerOptions": {
+    "lib": ["deno.window"],
+    "strict": true
+  }
+}

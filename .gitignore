@@ -1,0 +1,41 @@
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temporary files
+*.tmp
+*.temp
+
+# Build outputs (keep only the ones needed for releases)
+dist/d9-manager
+dist/d9-manager.gz
+dist/d9-manager-test*
+
+# Keep release artifacts
+!dist/d9-manager-linux*
+!dist/d9-manager-macos*
+!dist/d9-manager-windows*
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# Cache
+.cache/
+deno.lock
