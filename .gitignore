@@ -39,3 +39,6 @@ dist/d9-manager-test*
 # Cache
 .cache/
 deno.lockdist/
+
+# Generated version file
+src/version.ts

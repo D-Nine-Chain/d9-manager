@@ -1,0 +1,45 @@
+FROM ubuntu:22.04
+
+# Avoid prompts from apt
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install dependencies that d9-manager will need
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    jq \
+    sudo \
+    ca-certificates \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create ubuntu user with sudo privileges (required for d9 node setup)
+RUN useradd -m -s /bin/bash ubuntu && \
+    echo 'ubuntu ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+
+# Install Deno as root
+RUN curl -fsSL https://deno.land/install.sh | sh && \
+    mv /root/.deno/bin/deno /usr/local/bin/deno && \
+    chmod 755 /usr/local/bin/deno
+
+# Set working directory
+WORKDIR /home/ubuntu/d9-manager
+
+# Copy source code and build files
+COPY --chown=ubuntu:ubuntu . .
+
+# Switch to ubuntu user
+USER ubuntu
+
+# Build the d9-manager binary
+RUN deno compile \
+    --allow-all \
+    --no-check \
+    --output ./dist/d9-manager \
+    src/main.ts && \
+    chmod +x ./dist/d9-manager
+
+# Add the binary to PATH
+ENV PATH="/home/ubuntu/d9-manager/dist:$PATH"
+
+CMD ["/bin/bash"]

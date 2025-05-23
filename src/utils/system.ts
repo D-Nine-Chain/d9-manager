@@ -51,13 +51,20 @@ export async function checkDiskSpace(required: number): Promise<boolean> {
 
 export async function executeCommand(command: string, args: string[]): Promise<{ success: boolean; output: string; error?: string }> {
   try {
-    const process = new Deno.Command(command, { args });
+    const process = new Deno.Command(command, { 
+      args,
+      stdout: "piped",
+      stderr: "piped"
+    });
     const result = await process.output();
+    
+    const output = new TextDecoder().decode(result.stdout);
+    const errorOutput = new TextDecoder().decode(result.stderr);
     
     return {
       success: result.code === 0,
-      output: new TextDecoder().decode(result.stdout),
-      error: result.code !== 0 ? new TextDecoder().decode(result.stderr) : undefined
+      output: output + (errorOutput ? '\n' + errorOutput : ''),
+      error: result.code !== 0 ? errorOutput || 'Command failed' : undefined
     };
   } catch (error) {
     return {
@@ -92,4 +99,25 @@ export async function createProgressBar(duration: number, message: string): Prom
   }
   
   console.log('\n');
+}
+
+export async function showProgress<T>(message: string, promise: Promise<T>): Promise<T> {
+  // Simple progress indicator using dots
+  const encoder = new TextEncoder();
+  Deno.stdout.writeSync(encoder.encode(`${message}`));
+  
+  const interval = setInterval(() => {
+    Deno.stdout.writeSync(encoder.encode('.'));
+  }, 500);
+  
+  try {
+    const result = await promise;
+    clearInterval(interval);
+    Deno.stdout.writeSync(encoder.encode(' ✓\n'));
+    return result;
+  } catch (error) {
+    clearInterval(interval);
+    Deno.stdout.writeSync(encoder.encode(' ✗\n'));
+    throw error;
+  }
 }
