@@ -21,15 +21,8 @@ npm-debug.log*
 *.tmp
 *.temp
 
-# Build outputs (keep only the ones needed for releases)
-dist/d9-manager
-dist/d9-manager.gz
-dist/d9-manager-test*
-
-# Keep release artifacts
-!dist/d9-manager-linux*
-!dist/d9-manager-macos*
-!dist/d9-manager-windows*
+# Build outputs - ignore entire dist folder
+dist/
 
 # Environment files
 .env
@@ -38,4 +31,7 @@ dist/d9-manager-test*
 
 # Cache
 .cache/
-deno.lockdist/
+deno.lock
+
+# Generated version file
+src/version.ts
