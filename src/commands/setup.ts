@@ -50,8 +50,6 @@ export async function setupNode(messages: Messages): Promise<void> {
   
   // Configure node
   await configureNode(nodeType as NodeType, messages);
-  
-  console.log(`✅ ${messages.progress.complete}`);
 }
 
 async function installD9Node(messages: Messages): Promise<void> {
@@ -267,7 +265,27 @@ WantedBy=multi-user.target
   // Generate keys if needed
   await generateNodeKeys();
   
+  // Start the service
+  console.log('\n🚀 Starting D9 node service...');
   await executeCommand('sudo', ['systemctl', 'start', 'd9-node.service']);
+  
+  // Give service a moment to start
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  
+  // Show logs
+  console.log('\n📋 Node is starting up. Here are the recent logs:');
+  console.log('──────────────────────────────────────────────────');
+  console.log('Press Ctrl+C to stop viewing logs\n');
+  
+  // Run journalctl to show logs (this will take over the terminal)
+  const journalProcess = new Deno.Command('sudo', {
+    args: ['journalctl', '-u', 'd9-node', '-f', '-n', '100'],
+    stdin: 'inherit',
+    stdout: 'inherit',
+    stderr: 'inherit'
+  });
+  
+  await journalProcess.spawn().status;
 }
 
 async function generateNodeKeys(): Promise<void> {
