@@ -5,6 +5,34 @@ import { checkDiskSpace, executeCommand, createProgressBar, systemctl, showProgr
 export async function setupNode(messages: Messages): Promise<void> {
   console.log('\n' + messages.setupNewNode);
   
+  // Check system requirements first
+  console.log('\n🔍 Checking system requirements...\n');
+  
+  // Check Ubuntu 22.04
+  try {
+    const osReleaseContent = await Deno.readTextFile('/etc/os-release');
+    const isUbuntu = osReleaseContent.includes('ID=ubuntu');
+    const isUbuntu2204 = osReleaseContent.includes('VERSION_ID="22.04"');
+    
+    if (!isUbuntu || !isUbuntu2204) {
+      console.log('❌ Error: This script only supports Ubuntu 22.04. Please make sure you\'re using Ubuntu 22.04.');
+      return;
+    }
+    console.log('✅ Ubuntu 22.04');
+  } catch {
+    console.log('❌ Error: Could not determine OS version. This script requires Ubuntu 22.04.');
+    return;
+  }
+  
+  // Check architecture
+  const archResult = await executeCommand('uname', ['-m']);
+  if (!archResult.success || archResult.output.trim() !== 'x86_64') {
+    console.log('❌ Error: This script only supports x86_64 architecture. ARM64/aarch64 users please use the build from source script.');
+    console.log('Please use: curl -sSf https://raw.githubusercontent.com/D-Nine-Chain/d9_node/main/scripts/build-node.sh | bash');
+    return;
+  }
+  console.log('✅ Architecture: x86_64');
+  
   // Node type selection
   const nodeType = await Select.prompt<NodeType>({
     message: 'Select node type:',
@@ -37,13 +65,21 @@ export async function setupNode(messages: Messages): Promise<void> {
 
   // Check disk space requirements
   const requiredSpace = nodeType === NodeType.ARCHIVER ? 120 : 60;
-  const hasSpace = await checkDiskSpace(requiredSpace);
+  console.log('\n💾 Current disk usage:');
+  await executeCommand('df', ['-h', '/']);
+  console.log(`\nRequired space: ${requiredSpace}GB`);
   
+  const hasSpace = await checkDiskSpace(requiredSpace);
   if (!hasSpace) {
-    console.log(`❌ ${messages.errors.diskSpace}`);
-    console.log(`Required: ${requiredSpace}GB`);
+    console.log(`\n❌ Error: You need at least ${requiredSpace}GB of free disk space. Please free up some space and try again.`);
     return;
   }
+  console.log('✅ Sufficient disk space');
+  
+  // Configure swap file
+  console.log('\n🔧 Configuring swap file...');
+  await configureSwap();
+  console.log('✅ Swap configured (1GB)');
 
   // Install node if not present
   await installD9Node(messages);
@@ -52,19 +88,36 @@ export async function setupNode(messages: Messages): Promise<void> {
   await configureNode(nodeType as NodeType, messages);
 }
 
+async function configureSwap(): Promise<void> {
+  // Turn off any existing swap
+  await executeCommand('sudo', ['swapoff', '-a']);
+  
+  // Remove existing swapfile if present
+  try {
+    await Deno.stat('/swapfile');
+    await executeCommand('sudo', ['rm', '/swapfile']);
+  } catch {
+    // Swapfile doesn't exist, that's fine
+  }
+  
+  // Create new swapfile
+  await executeCommand('sudo', ['fallocate', '-l', '1G', '/swapfile']);
+  await executeCommand('sudo', ['chmod', '600', '/swapfile']);
+  await executeCommand('sudo', ['mkswap', '/swapfile']);
+  await executeCommand('sudo', ['swapon', '/swapfile']);
+  
+  // Update fstab
+  const fstabContent = await Deno.readTextFile('/etc/fstab');
+  const fstabWithoutSwap = fstabContent.split('\n').filter(line => !line.includes('/swapfile')).join('\n');
+  await Deno.writeTextFile('/tmp/fstab.tmp', fstabWithoutSwap + '\n/swapfile none swap sw 0 0\n');
+  await executeCommand('sudo', ['mv', '/tmp/fstab.tmp', '/etc/fstab']);
+}
+
 async function installD9Node(messages: Messages): Promise<void> {
   console.log('\n🚀 Starting D9 node installation...\n');
   
-  // Check system requirements
-  console.log('🔍 Checking system architecture...');
-  const archResult = await executeCommand('uname', ['-m']);
-  if (!archResult.success) {
-    throw new Error('Failed to check system architecture');
-  }
-  console.log(`   Architecture: ${archResult.output.trim()}`);
-  
   // Update system
-  console.log('\n📦 Updating package lists...');
+  console.log('📦 Updating package lists...');
   const updateResult = await showProgress(
     'Running apt update...',
     executeCommand('sudo', ['apt', 'update', '-qq'])
@@ -85,6 +138,77 @@ async function installD9Node(messages: Messages): Promise<void> {
     throw new Error('Failed to install required packages');
   }
   console.log('✅ Required packages installed');
+  
+  // Check GLIBC version
+  console.log('\n🔍 Checking GLIBC version...');
+  const glibcResult = await executeCommand('ldd', ['--version']);
+  if (!glibcResult.success) {
+    throw new Error('Failed to check GLIBC version');
+  }
+  
+  // Extract GLIBC version - match the pattern from the bash script
+  const versionMatch = glibcResult.output.match(/([0-9]+\.[0-9]+)$/m);
+  if (!versionMatch) {
+    throw new Error('Could not parse GLIBC version');
+  }
+  
+  const glibcVersion = versionMatch[1];
+  const [major, minor] = glibcVersion.split('.').map(Number);
+  
+  console.log(`Current GLIBC version: ${glibcVersion}`);
+  console.log('Required GLIBC version: 2.38 or higher');
+  
+  // Check if GLIBC needs upgrade
+  if (major > 2 || (major === 2 && minor >= 38)) {
+    console.log('✅ GLIBC is compatible');
+  } else {
+    console.log('\n⚠️ GLIBC version is incompatible');
+    console.log('🔧 Attempting to upgrade GLIBC...');
+    
+    // Backup sources.list
+    await executeCommand('sudo', ['cp', '/etc/apt/sources.list', '/etc/apt/sources.list.backup']);
+    
+    // Add Ubuntu 24.04 repository
+    console.log('Adding Ubuntu 24.04 repository for newer glibc...');
+    const nobleRepoContent = 'deb http://archive.ubuntu.com/ubuntu noble main\n';
+    await Deno.writeTextFile('/tmp/noble.list', nobleRepoContent);
+    await executeCommand('sudo', ['mv', '/tmp/noble.list', '/etc/apt/sources.list.d/noble.list']);
+    
+    // Update package list
+    console.log('Updating package lists...');
+    await executeCommand('sudo', ['apt', 'update', '-qq']);
+    
+    // Install newer glibc
+    console.log('Installing newer glibc...');
+    const glibcInstallResult = await executeCommand('sudo', ['apt', 'install', '-y', '-qq', 'libc6']);
+    if (!glibcInstallResult.success) {
+      // Restore original sources and fail
+      await executeCommand('sudo', ['rm', '/etc/apt/sources.list.d/noble.list']);
+      await executeCommand('sudo', ['apt', 'update', '-qq']);
+      throw new Error('Failed to upgrade GLIBC. Please use the build from source script:\ncurl -sSf https://raw.githubusercontent.com/D-Nine-Chain/d9_node/main/scripts/build-node.sh | bash');
+    }
+    
+    // Verify upgraded version
+    const newGlibcResult = await executeCommand('ldd', ['--version']);
+    const newVersionMatch = newGlibcResult.output.match(/([0-9]+\.[0-9]+)$/m);
+    if (!newVersionMatch) {
+      throw new Error('Could not verify new GLIBC version');
+    }
+    
+    const newGlibcVersion = newVersionMatch[1];
+    const [newMajor, newMinor] = newGlibcVersion.split('.').map(Number);
+    
+    console.log(`New GLIBC version: ${newGlibcVersion}`);
+    
+    if (newMajor > 2 || (newMajor === 2 && newMinor >= 38)) {
+      console.log('✅ GLIBC successfully upgraded to a compatible version');
+    } else {
+      // Restore and fail
+      await executeCommand('sudo', ['rm', '/etc/apt/sources.list.d/noble.list']);
+      await executeCommand('sudo', ['apt', 'update', '-qq']);
+      throw new Error('GLIBC upgrade failed. Please use the build from source script:\ncurl -sSf https://raw.githubusercontent.com/D-Nine-Chain/d9_node/main/scripts/build-node.sh | bash');
+    }
+  }
 
   // Download latest release
   console.log('\n🌐 Fetching latest release information...');
@@ -97,7 +221,7 @@ async function installD9Node(messages: Messages): Promise<void> {
   );
   
   if (!releaseResult.success) {
-    throw new Error('Failed to fetch latest release info');
+    throw new Error('Download failed. Please check your internet connection and try again.');
   }
 
   // Parse and download
@@ -106,7 +230,7 @@ async function installD9Node(messages: Messages): Promise<void> {
     releaseData = JSON.parse(releaseResult.output);
   } catch (e) {
     console.error('Failed to parse release data:', releaseResult.output);
-    throw new Error('Invalid release data from GitHub');
+    throw new Error('Download failed. Please check your internet connection and try again.');
   }
   
   // Check for rate limit
@@ -119,19 +243,20 @@ async function installD9Node(messages: Messages): Promise<void> {
   }
   
   if (!releaseData.assets || !Array.isArray(releaseData.assets)) {
-    console.error('Release data structure:', JSON.stringify(releaseData, null, 2));
-    throw new Error('No assets found in release data');
+    console.error('Could not find download URLs');
+    throw new Error('Download failed. Please check your internet connection and try again.');
   }
   
   const tarballAsset = releaseData.assets.find((asset: any) => asset.name.endsWith('.tar.gz'));
   const hashAsset = releaseData.assets.find((asset: any) => asset.name.endsWith('.sha256'));
 
   if (!tarballAsset || !hashAsset) {
-    console.error('Available assets:', releaseData.assets.map((a: any) => a.name));
-    throw new Error('Required release assets not found (.tar.gz and .sha256)');
+    console.error('Could not find download URLs');
+    throw new Error('Download failed. Please check your internet connection and try again.');
   }
   
-  console.log(`✅ Found release: ${releaseData.tag_name || 'latest'}`);
+  console.log('Download URL:', tarballAsset.browser_download_url);
+  console.log('Hash URL:', hashAsset.browser_download_url);
 
   // Download files
   console.log('\n📥 Downloading D9 node binary...');
@@ -141,18 +266,18 @@ async function installD9Node(messages: Messages): Promise<void> {
   );
   
   if (!downloadResult.success) {
-    throw new Error(`Failed to download binary: ${downloadResult.error}`);
+    throw new Error('Download failed. Please check your internet connection and try again.');
   }
-  console.log(`✅ Downloaded binary (${(tarballAsset.size / 1024 / 1024).toFixed(1)} MB)`);
+  console.log('✅ Downloaded binary');
   
   console.log('\n📥 Downloading checksum file...');
   const hashResult = await showProgress(
-    'Downloading checksum...',
+    'Downloading SHA256 hash...',
     executeCommand('wget', ['-O', '/tmp/d9-node.tar.gz.sha256', hashAsset.browser_download_url])
   );
   
   if (!hashResult.success) {
-    throw new Error(`Failed to download checksum: ${hashResult.error}`);
+    throw new Error('Download failed. Please check your internet connection and try again.');
   }
   console.log('✅ Downloaded checksum');
 
@@ -163,14 +288,23 @@ async function installD9Node(messages: Messages): Promise<void> {
   await Deno.writeTextFile('/tmp/d9-node.tar.gz.sha256', `${checksumHash}  d9-node.tar.gz\n`);
 
   // Verify integrity
-  console.log('🔐 Verifying file integrity...');
-  const hashCheck = await executeCommand('sh', ['-c', 'cd /tmp && sha256sum -c d9-node.tar.gz.sha256']);
-  if (!hashCheck.success) {
-    console.error('Hash verification output:', hashCheck.output);
-    console.error('Hash verification error:', hashCheck.error);
+  console.log('\n🔐 Verifying file integrity...');
+  const expectedHashResult = await executeCommand('cat', ['/tmp/d9-node.tar.gz.sha256']);
+  const actualHashResult = await executeCommand('sha256sum', ['/tmp/d9-node.tar.gz']);
+  
+  if (!expectedHashResult.success || !actualHashResult.success) {
     throw new Error('File integrity verification failed');
   }
-  console.log('✅ Integrity check passed');
+  
+  const expectedHash = expectedHashResult.output.trim().split(/\s+/)[0];
+  const actualHash = actualHashResult.output.trim().split(/\s+/)[0];
+  
+  if (expectedHash === actualHash) {
+    console.log('✅ File integrity verified');
+  } else {
+    await executeCommand('rm', ['-f', '/tmp/d9-node.tar.gz', '/tmp/d9-node.tar.gz.sha256']);
+    throw new Error('File integrity verification failed');
+  }
 
   // Extract and install
   console.log('\n📦 Extracting binary...');
