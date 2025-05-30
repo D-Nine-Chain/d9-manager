@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] - 2025-05-30
+
+### Improved
+- Enhanced GLIBC error messages with detailed diagnostics
+- Added specific error details and command output to GLIBC failures
+- Included common failure reasons (package conflicts, dependencies, network issues)
+- Show actual vs expected output format for parsing errors
+- Display version numbers when upgrade attempts fail
+- Provide clearer troubleshooting guidance
+
+## [1.0.3] - 2025-05-29
+
+### Fixed
+- GLIBC 2.38 compatibility issue in node setup
+- Automatic log viewing after node startup
+
+### Improved
+- Error handling during d9-node installation
+
 ### Added
 - Initial release of D9 Node Manager
 - Multi-language support (English/Chinese)
