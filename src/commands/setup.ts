@@ -143,13 +143,21 @@ async function installD9Node(messages: Messages): Promise<void> {
   console.log('\n🔍 Checking GLIBC version...');
   const glibcResult = await executeCommand('ldd', ['--version']);
   if (!glibcResult.success) {
-    throw new Error('Failed to check GLIBC version');
+    let checkError = 'Failed to check GLIBC version';
+    if (glibcResult.error) {
+      checkError += `\n\nError: ${glibcResult.error}`;
+    }
+    checkError += '\n\nThis might mean ldd is not installed or accessible.';
+    throw new Error(checkError);
   }
   
   // Extract GLIBC version - match the pattern from the bash script
   const versionMatch = glibcResult.output.match(/([0-9]+\.[0-9]+)$/m);
   if (!versionMatch) {
-    throw new Error('Could not parse GLIBC version');
+    let parseError = 'Could not parse GLIBC version from ldd output';
+    parseError += `\n\nReceived output: ${glibcResult.output.substring(0, 200)}`;
+    parseError += '\n\nExpected format: ldd (GNU libc) X.XX';
+    throw new Error(parseError);
   }
   
   const glibcVersion = versionMatch[1];
@@ -185,14 +193,32 @@ async function installD9Node(messages: Messages): Promise<void> {
       // Restore original sources and fail
       await executeCommand('sudo', ['rm', '/etc/apt/sources.list.d/noble.list']);
       await executeCommand('sudo', ['apt', 'update', '-qq']);
-      throw new Error('Failed to upgrade GLIBC. Please use the build from source script:\ncurl -sSf https://raw.githubusercontent.com/D-Nine-Chain/d9_node/main/scripts/build-node.sh | bash');
+      
+      let errorDetails = 'Failed to upgrade GLIBC';
+      if (glibcInstallResult.error) {
+        errorDetails += `\n\nError details: ${glibcInstallResult.error}`;
+      }
+      if (glibcInstallResult.output) {
+        errorDetails += `\n\nCommand output: ${glibcInstallResult.output}`;
+      }
+      errorDetails += '\n\nThis usually happens because:';
+      errorDetails += '\n- Package conflicts with existing system libraries';
+      errorDetails += '\n- Missing dependencies or broken packages';
+      errorDetails += '\n- Network issues preventing package download';
+      errorDetails += '\n\nPlease use the build from source script instead:';
+      errorDetails += '\ncurl -sSf https://raw.githubusercontent.com/D-Nine-Chain/d9_node/main/scripts/build-node.sh | bash';
+      
+      throw new Error(errorDetails);
     }
     
     // Verify upgraded version
     const newGlibcResult = await executeCommand('ldd', ['--version']);
     const newVersionMatch = newGlibcResult.output.match(/([0-9]+\.[0-9]+)$/m);
     if (!newVersionMatch) {
-      throw new Error('Could not verify new GLIBC version');
+      let verifyError = 'Could not verify new GLIBC version after upgrade';
+      verifyError += `\n\nReceived output: ${newGlibcResult.output.substring(0, 200)}`;
+      verifyError += '\n\nThis might indicate the upgrade was incomplete.';
+      throw new Error(verifyError);
     }
     
     const newGlibcVersion = newVersionMatch[1];
@@ -206,7 +232,13 @@ async function installD9Node(messages: Messages): Promise<void> {
       // Restore and fail
       await executeCommand('sudo', ['rm', '/etc/apt/sources.list.d/noble.list']);
       await executeCommand('sudo', ['apt', 'update', '-qq']);
-      throw new Error('GLIBC upgrade failed. Please use the build from source script:\ncurl -sSf https://raw.githubusercontent.com/D-Nine-Chain/d9_node/main/scripts/build-node.sh | bash');
+      let upgradeError = `GLIBC upgrade failed - version ${newGlibcVersion} is still below required 2.38`;
+      upgradeError += '\n\nThis can happen when:';
+      upgradeError += '\n- The system cannot upgrade GLIBC due to dependencies';
+      upgradeError += '\n- Ubuntu 22.04 base system limitations';
+      upgradeError += '\n\nPlease use the build from source script instead:';
+      upgradeError += '\ncurl -sSf https://raw.githubusercontent.com/D-Nine-Chain/d9_node/main/scripts/build-node.sh | bash';
+      throw new Error(upgradeError);
     }
   }
 
