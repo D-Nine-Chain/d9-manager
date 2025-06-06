@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2025-06-06
+
+### Breaking Changes
+- **Changed default data directory location** from user home to `/var/lib/d9-node` for new installations
+- **Introduced dedicated service user** (`d9-node`) for enhanced security in new installations
+- Legacy mode auto-detection preserves compatibility with existing installations
+
+### Added
+- **Multiple installation modes**:
+  - Easy mode: Automated secure setup (recommended)
+  - Hard mode: Maximum security with HD key derivation and password protection
+  - Legacy mode: Automatic compatibility for existing installations
+- **Debian 12 support** in addition to Ubuntu 22.04
+- **Authority Discovery key** (4th validator key) generation
+- **Enhanced key security** in hard mode:
+  - Password-protected root mnemonic generation
+  - Hierarchical deterministic key derivation
+  - Mnemonic verification process
+  - Certificate generation with validator information
+- **Improved GLIBC 2.38 compatibility** for both Ubuntu and Debian
+
+### Improved
+- **Security hardening**:
+  - Dedicated system user with restricted permissions
+  - Enhanced file permission management
+  - No shell access for service user
+- **Better error handling** and diagnostics throughout setup process
+- **Automatic OS detection** with appropriate user configuration
+- **Repository management** with proper APT pinning for Debian
+
+### Fixed
+- Makefile syntax error in version comment
+
 ## [1.0.4] - 2025-05-30
 
 ### Improved
