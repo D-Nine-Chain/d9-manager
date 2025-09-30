@@ -35,3 +35,161 @@ deno.lock
 
 # Generated version file
 src/version.ts
+
+# ============================================
+# CRITICAL: Cryptographic Material
+# ============================================
+
+# Private Keys - ANY exposure = immediate compromise
+*.key
+*.pem
+*.p12
+*.pfx
+*.pk8
+*.p8
+id_rsa
+id_rsa.*
+id_dsa
+id_dsa.*
+id_ecdsa
+id_ecdsa.*
+id_ed25519
+id_ed25519.*
+*_rsa
+*_dsa
+*_ecdsa
+*_ed25519
+
+# Wallet Files - Contains keys for blockchain accounts
+*.wallet
+*.keystore
+wallet.json
+keystore.json
+*-keystore.json
+UTC--*
+
+# Mnemonics/Seeds - Root of ALL derived keys
+*.seed
+*.mnemonic
+*seed.txt
+*mnemonic.txt
+seed_phrase*
+mnemonic_phrase*
+recovery.txt
+recovery_phrase*
+backup_phrase*
+
+# ============================================
+# Node/Validator Data
+# ============================================
+
+# Node data directory - Contains active validator keys
+node-data/
+chains/
+**/keystore/
+**/*keystore*/
+
+# ============================================
+# Backup Files - Often contain historical keys
+# ============================================
+*.bak
+*.backup
+*.old
+*.orig
+*.save
+*.swm
+*.swn
+*~
+.#*
+\#*\#
+
+# ============================================
+# Sensitive Configuration
+# ============================================
+
+# Config with secrets
+config.local.*
+config.prod.*
+config.production.*
+secrets.*
+credentials.*
+*-credentials.*
+*.secret
+*.secrets
+.secrets/
+
+# ============================================
+# Cloud Provider Credentials
+# ============================================
+
+# AWS
+.aws/
+aws_credentials
+aws_config
+
+# Google Cloud
+.gcloud/
+gcloud.json
+application_default_credentials.json
+
+# Azure
+.azure/
+azure_credentials
+
+# Kubernetes
+.kube/
+kubeconfig*
+
+# ============================================
+# Certificates (when containing private keys)
+# ============================================
+*.crt
+*.cer
+*.der
+*.p7b
+*.p7c
+
+# ============================================
+# Database Files
+# ============================================
+*.db
+*.sqlite
+*.sqlite3
+*.sql
+*.dump
+
+# ============================================
+# SSH Configuration
+# ============================================
+.ssh/
+known_hosts
+authorized_keys
+ssh_host_*_key
+ssh_host_*_key.pub
+
+# ============================================
+# Docker/Container Files
+# ============================================
+.docker/config.json
+docker-compose.override.yml
+
+# ============================================
+# Test Fixtures - May contain example keys
+# ============================================
+test/fixtures/**/*.key
+test/fixtures/**/*.seed
+test/**/*secret*
+**/*.test.key
+**/*.example.key
+**/example*.key
+**/example*.seed
+
+# ============================================
+# Claude Code
+# ============================================
+.claude/
+
+# ============================================
+# Build and Test Scripts
+# ============================================
+scripts/
