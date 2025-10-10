@@ -12,14 +12,39 @@ export interface KeystoreInfo {
 export async function readKeystoreInfo(): Promise<KeystoreInfo | null> {
 	await cryptoWaitReady();
 
-	const keystorePath = "/home/ubuntu/node-data/chains/d9_main/keystore";
+	// Try multiple possible keystore locations
+	const possiblePaths = [
+		"/var/lib/d9-node/chains/d9_main/keystore",  // New mode (dedicated user)
+		"/home/ubuntu/node-data/chains/d9_main/keystore",  // Ubuntu legacy
+		"/home/admin/node-data/chains/d9_main/keystore",   // Debian legacy
+	];
+
+	// Add current user's path if SUDO_USER is set
+	const sudoUser = Deno.env.get("SUDO_USER") || Deno.env.get("USER");
+	if (sudoUser && sudoUser !== "ubuntu" && sudoUser !== "admin") {
+		possiblePaths.push(`/home/${sudoUser}/node-data/chains/d9_main/keystore`);
+	}
+
+	let keystorePath: string | null = null;
+
+	// Find the first existing keystore directory
+	for (const path of possiblePaths) {
+		try {
+			const stat = await Deno.stat(path);
+			if (stat.isDirectory) {
+				keystorePath = path;
+				break;
+			}
+		} catch {
+			// Path doesn't exist, try next
+		}
+	}
+
+	if (!keystorePath) {
+		return null;
+	}
 
 	try {
-		// Check if keystore directory exists
-		const keystoreDir = await Deno.stat(keystorePath);
-		if (!keystoreDir.isDirectory) {
-			return null;
-		}
 
 		// Look for aura key (starts with 61757261)
 		const files = [];
