@@ -15,7 +15,7 @@ export async function setupNode(messages: Messages): Promise<void> {
   // Check system requirements first
   console.log('\n🔍 ' + messages.setup.checkingRequirements + '\n');
   
-  // Check OS compatibility (Ubuntu 22.04 or Debian 12)
+  // Check OS compatibility (Ubuntu 22.04 or Debian 11+)
   let osInfo: { type: 'ubuntu' | 'debian'; user: string } | null = null;
   
   try {
@@ -23,13 +23,22 @@ export async function setupNode(messages: Messages): Promise<void> {
     const isUbuntu = osReleaseContent.includes('ID=ubuntu');
     const isDebian = osReleaseContent.includes('ID=debian');
     const isUbuntu2204 = osReleaseContent.includes('VERSION_ID="22.04"');
-    const isDebian12 = osReleaseContent.includes('VERSION_ID="12"');
-    
+
+    // Extract Debian version if present
+    const debianVersionMatch = osReleaseContent.match(/VERSION_ID="(\d+)"/);
+    const debianVersion = debianVersionMatch ? parseInt(debianVersionMatch[1]) : null;
+
     if (isUbuntu && isUbuntu2204) {
       console.log('✅ ' + messages.setup.ubuntu2204);
       osInfo = { type: 'ubuntu', user: 'ubuntu' };
-    } else if (isDebian && isDebian12) {
-      console.log('✅ ' + messages.setup.debian12);
+    } else if (isDebian && debianVersion && debianVersion >= 11) {
+      // Support Debian 11, 12, 13+ for better compatibility
+      const versionLabel = debianVersion === 12 ? messages.setup.debian12 : `Debian ${debianVersion}`;
+      console.log('✅ ' + versionLabel);
+      osInfo = { type: 'debian', user: Deno.env.get('SUDO_USER') || Deno.env.get('USER') || 'debian' };
+    } else if (isDebian && !debianVersionMatch) {
+      // Handle Debian testing/unstable which might not have VERSION_ID
+      console.log('✅ Debian (testing/unstable)');
       osInfo = { type: 'debian', user: Deno.env.get('SUDO_USER') || Deno.env.get('USER') || 'debian' };
     } else {
       console.log('❌ ' + messages.setup.osIncompatible);

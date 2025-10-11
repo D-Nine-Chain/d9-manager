@@ -48,7 +48,7 @@ export const messages: Record<'en' | 'zh', Messages> = {
     setup: {
       checkingRequirements: 'Checking system requirements...',
       osCompatible: 'OS compatible',
-      osIncompatible: 'Error: This script only supports Ubuntu 22.04 or Debian 12 x64. Please use a supported OS.',
+      osIncompatible: 'Error: This script only supports Ubuntu 22.04 or Debian 11+ x64. Please use a supported OS.',
       archCompatible: 'Architecture: x86_64',
       archIncompatible: 'Error: This script only supports x86_64 architecture. ARM64/aarch64 users please use the build from source script.',
       selectNodeType: 'Select node type:',
@@ -218,7 +218,7 @@ export const messages: Record<'en' | 'zh', Messages> = {
     setup: {
       checkingRequirements: '正在检查系统要求...',
       osCompatible: '操作系统兼容',
-      osIncompatible: '错误：此脚本仅支持 Ubuntu 22.04 或 Debian 12 x64。请使用支持的操作系统。',
+      osIncompatible: '错误：此脚本仅支持 Ubuntu 22.04 或 Debian 11+ x64。请使用支持的操作系统。',
       archCompatible: '架构：x86_64',
       archIncompatible: '错误：此脚本仅支持 x86_64 架构。ARM64/aarch64 用户请使用源码构建脚本。',
       selectNodeType: '选择节点类型：',
