@@ -43,7 +43,9 @@ async function main() {
 
 	console.clear();
 	console.log(colors.blue.bold(messages.welcome));
-	console.log(colors.gray(`Version: ${VERSION} (${COMMIT})`));
+	console.log(colors.gray(`Version: ${VERSION}`));
+	console.log(colors.gray(`Commit: ${COMMIT}`));
+	console.log(colors.gray(`Built: ${BUILD_DATE}`));
 	console.log("═".repeat(50));
 
 	// Check system and D9 binary
@@ -65,15 +67,27 @@ async function main() {
 	console.log(`✅ D9 binary found at: ${systemInfo.binaryPath}`);
 
 	// Check keystore access
+	console.log("\n📁 Keystore Check");
+	console.log("─".repeat(30));
 	const keyAccess = await Confirm.prompt(messages.keyAccessPrompt);
 	if (!keyAccess) {
 		console.log("❌ Keystore access is required for most operations. Exiting.");
 		return;
 	}
 
-	const hasKeys = await hasValidKeystore();
+	let hasKeys = false;
+	try {
+		hasKeys = await hasValidKeystore();
+	} catch (error) {
+		console.error("\n❌ Error checking keystore:");
+		console.error(`   ${error instanceof Error ? error.message : String(error)}`);
+		if (error instanceof Error && error.stack) {
+			console.error(`   Stack: ${error.stack}`);
+		}
+	}
+
 	if (!hasKeys) {
-		console.log(`⚠️  ${messages.errors.keyNotFound}`);
+		console.log(`\n⚠️  ${messages.errors.keyNotFound}`);
 		const setupNew = await Confirm.prompt("Setup new node with keys?");
 		if (setupNew) {
 			await setupNode(messages);
@@ -85,7 +99,17 @@ async function main() {
 	}
 
 	// Get node address and check balance
-	const nodeAddress = await getNodeAddress();
+	let nodeAddress: string | null = null;
+	try {
+		nodeAddress = await getNodeAddress();
+	} catch (error) {
+		console.error("\n❌ Error getting node address:");
+		console.error(`   ${error instanceof Error ? error.message : String(error)}`);
+		if (error instanceof Error && error.stack) {
+			console.error(`   Stack: ${error.stack}`);
+		}
+	}
+
 	if (nodeAddress) {
 		console.log(`\n🔗 Node Address: ${nodeAddress}`);
 
@@ -93,9 +117,11 @@ async function main() {
 			await createProgressBar(1500, messages.checkingBalance);
 			await checkBalanceWithPrompt(nodeAddress);
 		} catch (error) {
-			console.log(
-				`⚠️  Could not check balance: ${error instanceof Error ? error.message : String(error)}`,
-			);
+			console.error(`\n⚠️  Could not check balance:`);
+			console.error(`   ${error instanceof Error ? error.message : String(error)}`);
+			if (error instanceof Error && error.stack) {
+				console.error(`   Stack: ${error.stack}`);
+			}
 		}
 	}
 
@@ -134,7 +160,12 @@ async function main() {
 					break;
 			}
 		} catch (error) {
-			console.log(`❌ Error: ${error instanceof Error ? error.message : String(error)}`);
+			console.error(`\n❌ Error executing action:`);
+			console.error(`   Action: ${action}`);
+			console.error(`   Error: ${error instanceof Error ? error.message : String(error)}`);
+			if (error instanceof Error && error.stack) {
+				console.error(`   Stack trace: ${error.stack}`);
+			}
 		}
 
 		if (continueLoop && action !== "exit") {

@@ -17,13 +17,19 @@ export async function readKeystoreInfo(): Promise<KeystoreInfo | null> {
 		"/var/lib/d9-node/chains/d9_main/keystore",  // New mode (dedicated user)
 		"/home/ubuntu/node-data/chains/d9_main/keystore",  // Ubuntu legacy
 		"/home/admin/node-data/chains/d9_main/keystore",   // Debian legacy
+		"/home/debian/node-data/chains/d9_main/keystore",  // Debian user
 	];
 
 	// Add current user's path if SUDO_USER is set
 	const sudoUser = Deno.env.get("SUDO_USER") || Deno.env.get("USER");
-	if (sudoUser && sudoUser !== "ubuntu" && sudoUser !== "admin") {
+	if (sudoUser && sudoUser !== "ubuntu" && sudoUser !== "admin" && sudoUser !== "debian") {
 		possiblePaths.push(`/home/${sudoUser}/node-data/chains/d9_main/keystore`);
 	}
+
+	console.log("🔍 Searching for keystore in the following locations:");
+	possiblePaths.forEach((path, idx) => {
+		console.log(`   ${idx + 1}. ${path}`);
+	});
 
 	let keystorePath: string | null = null;
 
@@ -33,18 +39,22 @@ export async function readKeystoreInfo(): Promise<KeystoreInfo | null> {
 			const stat = await Deno.stat(path);
 			if (stat.isDirectory) {
 				keystorePath = path;
+				console.log(`✅ Found keystore at: ${path}`);
 				break;
 			}
-		} catch {
-			// Path doesn't exist, try next
+		} catch (error) {
+			console.log(`   ❌ Not found: ${path}`);
 		}
 	}
 
 	if (!keystorePath) {
+		console.log("❌ No keystore directory found in any of the expected locations.");
+		console.log("💡 Tip: Keystore is created during node setup. Run node setup first.");
 		return null;
 	}
 
 	try {
+		console.log(`\n🔑 Checking for keys in keystore...`);
 
 		// Look for aura key (starts with 61757261)
 		const files = [];
@@ -55,11 +65,17 @@ export async function readKeystoreInfo(): Promise<KeystoreInfo | null> {
 		}
 
 		if (files.length === 0) {
+			console.log("❌ No aura key found in keystore (expected file starting with '61757261')");
+			console.log(`   Keystore path: ${keystorePath}`);
+			console.log("💡 Keys are generated during node setup. Please run setup first.");
 			return { address: "", publicKey: "", hasKeys: false };
 		}
 
+		console.log(`✅ Found ${files.length} aura key(s)`);
+
 		// Read the first aura key file
 		const keyFilePath = `${keystorePath}/${files[0]}`;
+		console.log(`📖 Reading key from: ${keyFilePath}`);
 		let keyData = await Deno.readTextFile(keyFilePath);
 
 		// Remove quotes if present (key files often have quotes around the actual key)
@@ -118,16 +134,21 @@ export async function readKeystoreInfo(): Promise<KeystoreInfo | null> {
 		const keyring = new Keyring({ type: "sr25519", ss58Format: 9 });
 		const keyPair = keyring.addFromUri(secretKey);
 
+		console.log(`✅ Successfully loaded key`);
+		console.log(`   Address: Dn${keyPair.address}`);
+
 		return {
 			address: `Dn${keyPair.address}`,
 			publicKey: u8aToHex(keyPair.publicKey),
 			hasKeys: true,
 		};
 	} catch (error) {
-		console.error(
-			"Error reading keystore:",
-			error instanceof Error ? error.message : String(error),
-		);
+		console.error("❌ Error reading keystore:");
+		console.error(`   Error: ${error instanceof Error ? error.message : String(error)}`);
+		if (error instanceof Error && error.stack) {
+			console.error(`   Stack trace: ${error.stack}`);
+		}
+		console.error(`   Keystore path: ${keystorePath || 'unknown'}`);
 		return null;
 	}
 }
