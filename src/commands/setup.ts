@@ -991,7 +991,13 @@ async function checkPackageState(): Promise<void> {
     const lines = dpkgCheck.output.split('\n');
     const hasBrokenPackages = lines.some(line => {
       const status = line.substring(0, 2);
-      return status === 'iU' || status === 'iF';
+      if (status === 'iU' || status === 'iF') {
+        console.log(`\n🐛 DEBUG: Found broken package status "${status}"`);
+        console.log(`   Line: "${line}"`);
+        console.log(`   First 10 chars: "${line.substring(0, 10).split('').map(c => c.charCodeAt(0)).join(',')}"`);
+        return true;
+      }
+      return false;
     });
 
     if (hasBrokenPackages) {
@@ -1017,7 +1023,13 @@ async function checkPackageState(): Promise<void> {
         const verifyLines = verifyCheck.output.split('\n');
         const stillBroken = verifyLines.some(line => {
           const status = line.substring(0, 2);
-          return status === 'iU' || status === 'iF';
+          if (status === 'iU' || status === 'iF') {
+            console.log(`\n🐛 DEBUG (verify): Found broken package status "${status}"`);
+            console.log(`   Line: "${line}"`);
+            console.log(`   First 10 chars: "${line.substring(0, 10).split('').map(c => c.charCodeAt(0)).join(',')}"`);
+            return true;
+          }
+          return false;
         });
         if (!stillBroken) {
           console.log('✅ Package state repaired with apt-get install -f');
