@@ -984,11 +984,19 @@ async function checkPackageState(): Promise<void> {
     );
   }
 
-  // Check for broken packages
+  // Check for broken packages (skip header lines)
   const dpkgCheck = await executeCommand('dpkg', ['-l']);
-  if (dpkgCheck.success && (dpkgCheck.output.includes('iU ') || dpkgCheck.output.includes('iF '))) {
-    console.log('\n⚠️  Detected broken package state');
-    console.log('🔧 Attempting automatic repair...\n');
+  if (dpkgCheck.success) {
+    // Check each line - broken packages have 'iU' or 'iF' as the first two characters
+    const lines = dpkgCheck.output.split('\n');
+    const hasBrokenPackages = lines.some(line => {
+      const status = line.substring(0, 2);
+      return status === 'iU' || status === 'iF';
+    });
+
+    if (hasBrokenPackages) {
+      console.log('\n⚠️  Detected broken package state');
+      console.log('🔧 Attempting automatic repair...\n');
 
     // Strategy 1: Try dpkg --configure -a
     console.log('Strategy 1: Running dpkg --configure -a...');
@@ -1005,10 +1013,17 @@ async function checkPackageState(): Promise<void> {
     if (aptFixResult.success) {
       // Verify it worked
       const verifyCheck = await executeCommand('dpkg', ['-l']);
-      if (verifyCheck.success && !verifyCheck.output.includes('iU ') && !verifyCheck.output.includes('iF ')) {
-        console.log('✅ Package state repaired with apt-get install -f');
-        console.log('✅ Package system is healthy');
-        return;
+      if (verifyCheck.success) {
+        const verifyLines = verifyCheck.output.split('\n');
+        const stillBroken = verifyLines.some(line => {
+          const status = line.substring(0, 2);
+          return status === 'iU' || status === 'iF';
+        });
+        if (!stillBroken) {
+          console.log('✅ Package state repaired with apt-get install -f');
+          console.log('✅ Package system is healthy');
+          return;
+        }
       }
     }
 
@@ -1031,6 +1046,7 @@ async function checkPackageState(): Promise<void> {
       'curl -L https://raw.githubusercontent.com/D-Nine-Chain/d9-manager/main/scripts/fix-broken-packages.sh | sudo bash\n\n' +
       'Or see RECOVERY.md for manual recovery steps.'
     );
+    }
   }
 
   console.log('✅ Package system is healthy');
