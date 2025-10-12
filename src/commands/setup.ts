@@ -227,7 +227,10 @@ async function configureSwap(): Promise<void> {
 
 async function installD9Node(messages: Messages, osInfo: { type: 'ubuntu' | 'debian'; user: string }, mode: InstallMode): Promise<void> {
   console.log('\n🚀 Starting D9 node installation...\n');
-  
+
+  // Pre-flight check for broken package state
+  await checkPackageState();
+
   // Update system
   console.log('📦 Updating package lists...');
   const updateResult = await showProgress(
@@ -309,103 +312,15 @@ async function installD9Node(messages: Messages, osInfo: { type: 'ubuntu' | 'deb
   } else {
     console.log('\n⚠️ GLIBC version is incompatible');
     console.log('🔧 Attempting to upgrade GLIBC...');
-    
-    // Backup sources.list
-    await executeCommand('sudo', ['cp', '/etc/apt/sources.list', '/etc/apt/sources.list.backup']);
-    
-    // Add appropriate repository based on OS
-    if (osInfo.type === 'ubuntu') {
-      console.log('Adding Ubuntu 24.04 repository for newer glibc...');
-      const nobleRepoContent = 'deb http://archive.ubuntu.com/ubuntu noble main\n';
-      await Deno.writeTextFile('/tmp/noble.list', nobleRepoContent);
-      await executeCommand('sudo', ['mv', '/tmp/noble.list', '/etc/apt/sources.list.d/noble.list']);
-    } else {
-      // For Debian 12, try testing/sid repositories for newer glibc
-      console.log('Adding Debian testing repository for newer glibc...');
-      const testingRepoContent = 'deb http://deb.debian.org/debian testing main\n';
-      await Deno.writeTextFile('/tmp/testing.list', testingRepoContent);
-      await executeCommand('sudo', ['mv', '/tmp/testing.list', '/etc/apt/sources.list.d/testing.list']);
-      
-      // Set up pinning to prevent full system upgrade
-      const pinContent = `Package: *
-Pin: release a=stable
-Pin-Priority: 700
 
-Package: libc6
-Pin: release a=testing
-Pin-Priority: 900
-`;
-      await Deno.writeTextFile('/tmp/preferences', pinContent);
-      await executeCommand('sudo', ['mv', '/tmp/preferences', '/etc/apt/preferences.d/libc6']);
-    }
-    
-    // Update package list
-    console.log('Updating package lists...');
-    await executeCommand('sudo', ['apt', 'update', '-qq']);
-    
-    // Install newer glibc
-    console.log('Installing newer glibc...');
-    const glibcInstallResult = await executeCommand('sudo', ['apt', 'install', '-y', '-qq', 'libc6']);
-    if (!glibcInstallResult.success) {
-      // Restore original sources and fail
-      if (osInfo.type === 'ubuntu') {
-        await executeCommand('sudo', ['rm', '/etc/apt/sources.list.d/noble.list']);
-      } else {
-        await executeCommand('sudo', ['rm', '/etc/apt/sources.list.d/testing.list']);
-        await executeCommand('sudo', ['rm', '-f', '/etc/apt/preferences.d/libc6']);
-      }
-      await executeCommand('sudo', ['apt', 'update', '-qq']);
-      
-      let errorDetails = 'Failed to upgrade GLIBC';
-      if (glibcInstallResult.error) {
-        errorDetails += `\n\nError details: ${glibcInstallResult.error}`;
-      }
-      if (glibcInstallResult.output) {
-        errorDetails += `\n\nCommand output: ${glibcInstallResult.output}`;
-      }
-      errorDetails += '\n\nThis usually happens because:';
-      errorDetails += '\n- Package conflicts with existing system libraries';
-      errorDetails += '\n- Missing dependencies or broken packages';
-      errorDetails += '\n- Network issues preventing package download';
-      errorDetails += '\n\nPlease use the build from source script instead:';
-      errorDetails += '\ncurl -sSf https://raw.githubusercontent.com/D-Nine-Chain/d9-node/main/scripts/build-node.sh | bash';
-      
-      throw new Error(errorDetails);
-    }
-    
-    // Verify upgraded version
-    const newGlibcResult = await executeCommand('ldd', ['--version']);
-    const newVersionMatch = newGlibcResult.output.match(/([0-9]+\.[0-9]+)$/m);
-    if (!newVersionMatch) {
-      let verifyError = 'Could not verify new GLIBC version after upgrade';
-      verifyError += `\n\nReceived output: ${newGlibcResult.output.substring(0, 200)}`;
-      verifyError += '\n\nThis might indicate the upgrade was incomplete.';
-      throw new Error(verifyError);
-    }
-    
-    const newGlibcVersion = newVersionMatch[1];
-    const [newMajor, newMinor] = newGlibcVersion.split('.').map(Number);
-    
-    console.log(`New GLIBC version: ${newGlibcVersion}`);
-    
-    if (newMajor > 2 || (newMajor === 2 && newMinor >= 38)) {
+    try {
+      await upgradeGlibc(osInfo);
       console.log('✅ GLIBC successfully upgraded to a compatible version');
-    } else {
-      // Restore and fail
-      if (osInfo.type === 'ubuntu') {
-        await executeCommand('sudo', ['rm', '/etc/apt/sources.list.d/noble.list']);
-      } else {
-        await executeCommand('sudo', ['rm', '/etc/apt/sources.list.d/testing.list']);
-        await executeCommand('sudo', ['rm', '-f', '/etc/apt/preferences.d/libc6']);
-      }
-      await executeCommand('sudo', ['apt', 'update', '-qq']);
-      let upgradeError = `GLIBC upgrade failed - version ${newGlibcVersion} is still below required 2.38`;
-      upgradeError += '\n\nThis can happen when:';
-      upgradeError += '\n- The system cannot upgrade GLIBC due to dependencies';
-      upgradeError += '\n- Ubuntu 22.04 base system limitations';
-      upgradeError += '\n\nPlease use the build from source script instead:';
-      upgradeError += '\ncurl -sSf https://raw.githubusercontent.com/D-Nine-Chain/d9-node/main/scripts/build-node.sh | bash';
-      throw new Error(upgradeError);
+    } catch (error) {
+      console.error(`\n❌ ${error instanceof Error ? error.message : String(error)}`);
+      console.log('\n💡 Alternative: Use the build-from-source script instead:');
+      console.log('   curl -sSf https://raw.githubusercontent.com/D-Nine-Chain/d9-node/main/scripts/build-node.sh | bash');
+      throw error;
     }
   }
 
@@ -1049,12 +964,150 @@ async function getSystemInfo() {
   const osRelease = await Deno.readTextFile('/etc/os-release').catch(() => 'unknown');
   const arch = await executeCommand('uname', ['-m']);
   const cpu = await executeCommand('cat', ['/proc/cpuinfo']).catch(() => ({ output: 'unknown' }));
-  
+
   return {
     os: osRelease.match(/PRETTY_NAME="(.+)"/)?.[1] || 'unknown',
     architecture: arch.success ? arch.output.trim() : 'unknown',
     processor: cpu.output.match(/model name\s*:\s*(.+)/)?.[1] || 'unknown'
   };
+}
+
+async function checkPackageState(): Promise<void> {
+  console.log('🔍 Checking package system health...');
+
+  // Check for dpkg locks
+  const lockCheck = await executeCommand('sudo', ['lsof', '/var/lib/dpkg/lock-frontend']);
+  if (lockCheck.success) {
+    throw new Error(
+      'Another package manager is running. Please wait for it to finish or run:\n' +
+      'sudo killall apt apt-get dpkg'
+    );
+  }
+
+  // Check for broken packages
+  const dpkgCheck = await executeCommand('dpkg', ['-l']);
+  if (dpkgCheck.success && (dpkgCheck.output.includes('iU ') || dpkgCheck.output.includes('iF '))) {
+    console.log('\n⚠️  Detected broken package state');
+    console.log('🔧 Attempting automatic repair...');
+
+    const fixResult = await executeCommand('sudo', ['dpkg', '--configure', '-a']);
+    if (!fixResult.success) {
+      throw new Error(
+        'Broken package state detected. Please run the recovery script:\n' +
+        'wget https://raw.githubusercontent.com/yourusername/d9-manager/main/scripts/fix-broken-packages.sh\n' +
+        'sudo bash fix-broken-packages.sh'
+      );
+    }
+
+    console.log('✅ Package state repaired');
+  }
+
+  console.log('✅ Package system is healthy');
+}
+
+async function upgradeGlibc(osInfo: { type: 'ubuntu' | 'debian'; user: string }): Promise<void> {
+  // Backup sources.list
+  await executeCommand('sudo', ['cp', '/etc/apt/sources.list', '/etc/apt/sources.list.d9backup']);
+
+  // Add appropriate repository based on OS
+  const repoFile = osInfo.type === 'ubuntu' ? 'noble.list' : 'testing.list';
+  const repoPath = `/etc/apt/sources.list.d/${repoFile}`;
+  const prefPath = '/etc/apt/preferences.d/libc6';
+
+  try {
+    if (osInfo.type === 'ubuntu') {
+      console.log('Adding Ubuntu 24.04 repository for newer glibc...');
+      const nobleRepoContent = 'deb http://archive.ubuntu.com/ubuntu noble main\n';
+      await Deno.writeTextFile('/tmp/noble.list', nobleRepoContent);
+      await executeCommand('sudo', ['mv', '/tmp/noble.list', repoPath]);
+    } else {
+      // For Debian, add testing repository with pinning
+      console.log('Adding Debian testing repository for newer glibc...');
+      const testingRepoContent = 'deb http://deb.debian.org/debian testing main\n';
+      await Deno.writeTextFile('/tmp/testing.list', testingRepoContent);
+      await executeCommand('sudo', ['mv', '/tmp/testing.list', repoPath]);
+
+      // Set up pinning to prevent full system upgrade - pin ALL libc packages
+      const pinContent = `Package: *
+Pin: release a=stable
+Pin-Priority: 700
+
+Package: libc6 libc6-dev libc6-i386 libc-bin libc-dev-bin libc-l10n locales
+Pin: release a=testing
+Pin-Priority: 900
+`;
+      await Deno.writeTextFile('/tmp/preferences', pinContent);
+      await executeCommand('sudo', ['mv', '/tmp/preferences', prefPath]);
+    }
+
+    // Update package lists
+    console.log('Updating package lists...');
+    const updateResult = await executeCommand('sudo', ['apt', 'update', '-qq']);
+    if (!updateResult.success) {
+      throw new Error(`Failed to update package lists: ${updateResult.error}`);
+    }
+
+    // Install ALL libc packages atomically
+    console.log('Installing newer glibc (all packages atomically)...');
+    const packages = osInfo.type === 'ubuntu'
+      ? ['libc6', 'libc6-dev', 'libc-bin', 'libc-dev-bin']
+      : ['libc6', 'libc6-dev', 'libc6-i386', 'libc-bin', 'libc-dev-bin', 'libc-l10n', 'locales'];
+
+    const glibcInstallResult = await executeCommand('sudo', [
+      'apt', 'install', '-y', '-qq', ...(osInfo.type === 'debian' ? ['-t', 'testing'] : []), ...packages
+    ]);
+
+    if (!glibcInstallResult.success) {
+      throw new Error(
+        `Failed to upgrade GLIBC packages atomically.\n` +
+        `Error: ${glibcInstallResult.error || glibcInstallResult.output}\n\n` +
+        `This usually happens because:\n` +
+        `- Package conflicts with existing system libraries\n` +
+        `- Missing dependencies or broken packages\n` +
+        `- Network issues preventing package download`
+      );
+    }
+
+    // Verify upgraded version
+    const newGlibcResult = await executeCommand('ldd', ['--version']);
+    const newVersionMatch = newGlibcResult.output.match(/([0-9]+\.[0-9]+)$/m);
+    if (!newVersionMatch) {
+      throw new Error(
+        `Could not verify new GLIBC version after upgrade.\n` +
+        `Output: ${newGlibcResult.output.substring(0, 200)}`
+      );
+    }
+
+    const newGlibcVersion = newVersionMatch[1];
+    const [newMajor, newMinor] = newGlibcVersion.split('.').map(Number);
+
+    console.log(`New GLIBC version: ${newGlibcVersion}`);
+
+    if (newMajor < 2 || (newMajor === 2 && newMinor < 38)) {
+      throw new Error(
+        `GLIBC upgrade failed - version ${newGlibcVersion} is still below required 2.38.\n` +
+        `This can happen when the system cannot upgrade GLIBC due to dependencies.`
+      );
+    }
+
+    // Cleanup: Remove testing repository after successful upgrade
+    console.log('🧹 Cleaning up testing repository...');
+    await executeCommand('sudo', ['rm', '-f', repoPath]);
+    if (osInfo.type === 'debian') {
+      await executeCommand('sudo', ['rm', '-f', prefPath]);
+    }
+    await executeCommand('sudo', ['apt', 'update', '-qq']);
+
+  } catch (error) {
+    // Rollback on failure
+    console.log('⚠️  Rolling back changes...');
+    await executeCommand('sudo', ['rm', '-f', repoPath]);
+    if (osInfo.type === 'debian') {
+      await executeCommand('sudo', ['rm', '-f', prefPath]);
+    }
+    await executeCommand('sudo', ['apt', 'update', '-qq']);
+    throw error;
+  }
 }
 
 function prompt(message: string): Promise<string> {

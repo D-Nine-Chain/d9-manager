@@ -190,6 +190,7 @@ test/**/*secret*
 .claude/
 
 # ============================================
-# Build and Test Scripts
+# Security Scanning Reports
 # ============================================
-scripts/
+gitleaks-report.json
+*.sarif
