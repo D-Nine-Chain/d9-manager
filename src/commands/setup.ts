@@ -988,18 +988,49 @@ async function checkPackageState(): Promise<void> {
   const dpkgCheck = await executeCommand('dpkg', ['-l']);
   if (dpkgCheck.success && (dpkgCheck.output.includes('iU ') || dpkgCheck.output.includes('iF '))) {
     console.log('\n⚠️  Detected broken package state');
-    console.log('🔧 Attempting automatic repair...');
+    console.log('🔧 Attempting automatic repair...\n');
 
+    // Strategy 1: Try dpkg --configure -a
+    console.log('Strategy 1: Running dpkg --configure -a...');
     const fixResult = await executeCommand('sudo', ['dpkg', '--configure', '-a']);
-    if (!fixResult.success) {
-      throw new Error(
-        'Broken package state detected. Please run the recovery script:\n' +
-        'wget https://raw.githubusercontent.com/yourusername/d9-manager/main/scripts/fix-broken-packages.sh\n' +
-        'sudo bash fix-broken-packages.sh'
-      );
+    if (fixResult.success) {
+      console.log('✅ Package state repaired with dpkg --configure -a');
+      console.log('✅ Package system is healthy');
+      return;
     }
 
-    console.log('✅ Package state repaired');
+    // Strategy 2: Try apt-get install -f
+    console.log('Strategy 2: Running apt-get install -f...');
+    const aptFixResult = await executeCommand('sudo', ['apt-get', 'install', '-f', '-y']);
+    if (aptFixResult.success) {
+      // Verify it worked
+      const verifyCheck = await executeCommand('dpkg', ['-l']);
+      if (verifyCheck.success && !verifyCheck.output.includes('iU ') && !verifyCheck.output.includes('iF ')) {
+        console.log('✅ Package state repaired with apt-get install -f');
+        console.log('✅ Package system is healthy');
+        return;
+      }
+    }
+
+    // Strategy 3: Hold problematic packages and try again
+    console.log('Strategy 3: Holding problematic packages temporarily...');
+    await executeCommand('sudo', ['apt-mark', 'hold', 'locales']);
+    const holdFixResult = await executeCommand('sudo', ['dpkg', '--configure', '-a']);
+    await executeCommand('sudo', ['apt-mark', 'unhold', 'locales']);
+
+    if (holdFixResult.success) {
+      console.log('✅ Package state repaired with package hold strategy');
+      console.log('✅ Package system is healthy');
+      return;
+    }
+
+    // All strategies failed - provide recovery instructions
+    console.error('\n❌ Automatic repair failed. Manual intervention required.\n');
+    throw new Error(
+      'Could not automatically repair package state. Please run the recovery script:\n\n' +
+      'curl -L https://raw.githubusercontent.com/D-Nine-Chain/d9-manager/main/scripts/fix-broken-packages.sh | sudo bash\n\n' +
+      'Or see RECOVERY.md for manual recovery steps.'
+    );
   }
 
   console.log('✅ Package system is healthy');
