@@ -1007,15 +1007,40 @@ async function checkPackageState(): Promise<void> {
     // Strategy 1: Try dpkg --configure -a
     console.log('Strategy 1: Running dpkg --configure -a...');
     const fixResult = await executeCommand('sudo', ['dpkg', '--configure', '-a']);
+
+    if (fixResult.output) {
+      console.log('Output:', fixResult.output.substring(0, 500));
+    }
+
     if (fixResult.success) {
-      console.log('✅ Package state repaired with dpkg --configure -a');
-      console.log('✅ Package system is healthy');
-      return;
+      // Verify it worked
+      const verify1Check = await executeCommand('dpkg', ['-l']);
+      if (verify1Check.success) {
+        const verify1Lines = verify1Check.output.split('\n');
+        const stillBroken1 = verify1Lines.some(line => {
+          const status = line.substring(0, 2);
+          return status === 'iU' || status === 'iF';
+        });
+        if (!stillBroken1) {
+          console.log('✅ Package state repaired with dpkg --configure -a');
+          console.log('✅ Package system is healthy');
+          return;
+        } else {
+          console.log('⚠️  Packages still broken after Strategy 1, trying next strategy...');
+        }
+      }
+    } else {
+      console.log('⚠️  Strategy 1 failed, trying next strategy...');
     }
 
     // Strategy 2: Try apt-get install -f
     console.log('Strategy 2: Running apt-get install -f...');
     const aptFixResult = await executeCommand('sudo', ['apt-get', 'install', '-f', '-y']);
+
+    if (aptFixResult.output) {
+      console.log('Output:', aptFixResult.output.substring(0, 500));
+    }
+
     if (aptFixResult.success) {
       // Verify it worked
       const verifyCheck = await executeCommand('dpkg', ['-l']);
@@ -1023,20 +1048,18 @@ async function checkPackageState(): Promise<void> {
         const verifyLines = verifyCheck.output.split('\n');
         const stillBroken = verifyLines.some(line => {
           const status = line.substring(0, 2);
-          if (status === 'iU' || status === 'iF') {
-            console.log(`\n🐛 DEBUG (verify): Found broken package status "${status}"`);
-            console.log(`   Line: "${line}"`);
-            console.log(`   First 10 chars: "${line.substring(0, 10).split('').map(c => c.charCodeAt(0)).join(',')}"`);
-            return true;
-          }
-          return false;
+          return status === 'iU' || status === 'iF';
         });
         if (!stillBroken) {
           console.log('✅ Package state repaired with apt-get install -f');
           console.log('✅ Package system is healthy');
           return;
+        } else {
+          console.log('⚠️  Packages still broken after Strategy 2, trying next strategy...');
         }
       }
+    } else {
+      console.log('⚠️  Strategy 2 failed, trying next strategy...');
     }
 
     // Strategy 3: Hold problematic packages and try again
@@ -1045,14 +1068,83 @@ async function checkPackageState(): Promise<void> {
     const holdFixResult = await executeCommand('sudo', ['dpkg', '--configure', '-a']);
     await executeCommand('sudo', ['apt-mark', 'unhold', 'locales']);
 
+    if (holdFixResult.output) {
+      console.log('Output:', holdFixResult.output.substring(0, 500));
+    }
+
     if (holdFixResult.success) {
-      console.log('✅ Package state repaired with package hold strategy');
-      console.log('✅ Package system is healthy');
-      return;
+      // Verify it worked
+      const verify3Check = await executeCommand('dpkg', ['-l']);
+      if (verify3Check.success) {
+        const verify3Lines = verify3Check.output.split('\n');
+        const stillBroken3 = verify3Lines.some(line => {
+          const status = line.substring(0, 2);
+          return status === 'iU' || status === 'iF';
+        });
+        if (!stillBroken3) {
+          console.log('✅ Package state repaired with package hold strategy');
+          console.log('✅ Package system is healthy');
+          return;
+        } else {
+          console.log('⚠️  Packages still broken after Strategy 3');
+        }
+      }
+    } else {
+      console.log('⚠️  Strategy 3 failed');
+    }
+
+    // Strategy 4: Force reconfigure specific broken packages
+    console.log('Strategy 4: Force reconfiguring broken packages...');
+    const brokenPackages: string[] = [];
+    lines.forEach(line => {
+      const status = line.substring(0, 2);
+      if (status === 'iU' || status === 'iF') {
+        // Extract package name (typically in columns after status)
+        const parts = line.trim().split(/\s+/);
+        if (parts.length > 1) {
+          brokenPackages.push(parts[1]);
+        }
+      }
+    });
+
+    if (brokenPackages.length > 0) {
+      console.log(`Found broken packages: ${brokenPackages.join(', ')}`);
+      console.log('Attempting to reinstall...');
+
+      const reinstallResult = await executeCommand('sudo', [
+        'apt-get', 'install', '--reinstall', '-y', ...brokenPackages
+      ]);
+
+      if (reinstallResult.output) {
+        console.log('Output:', reinstallResult.output.substring(0, 500));
+      }
+
+      if (reinstallResult.success) {
+        // Final verification
+        const finalCheck = await executeCommand('dpkg', ['-l']);
+        if (finalCheck.success) {
+          const finalLines = finalCheck.output.split('\n');
+          const stillBrokenFinal = finalLines.some(line => {
+            const status = line.substring(0, 2);
+            return status === 'iU' || status === 'iF';
+          });
+          if (!stillBrokenFinal) {
+            console.log('✅ Package state repaired by reinstalling broken packages');
+            console.log('✅ Package system is healthy');
+            return;
+          }
+        }
+      }
     }
 
     // All strategies failed - provide recovery instructions
     console.error('\n❌ Automatic repair failed. Manual intervention required.\n');
+    console.log('Broken packages detected:', brokenPackages.join(', '));
+    console.log('\nTry manually fixing with:');
+    console.log(`  sudo apt-get install --reinstall ${brokenPackages.join(' ')}`);
+    console.log('  sudo dpkg --configure -a');
+    console.log('  sudo apt-get install -f\n');
+
     throw new Error(
       'Could not automatically repair package state. Please run the recovery script:\n\n' +
       'curl -L https://raw.githubusercontent.com/D-Nine-Chain/d9-manager/main/scripts/fix-broken-packages.sh | sudo bash\n\n' +
