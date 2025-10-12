@@ -975,41 +975,13 @@ async function getSystemInfo() {
 async function checkPackageState(): Promise<void> {
   console.log('🔍 Checking package system health...');
 
-  // Check for dpkg locks and attempt to clear them
+  // Check for dpkg locks
   const lockCheck = await executeCommand('sudo', ['lsof', '/var/lib/dpkg/lock-frontend']);
   if (lockCheck.success) {
-    console.log('⚠️  Detected locked package manager');
-
-    // Extract PID from lsof output
-    const lines = lockCheck.output.split('\n');
-    const pids: string[] = [];
-    for (const line of lines) {
-      if (line.includes('lock-frontend')) {
-        const parts = line.trim().split(/\s+/);
-        if (parts.length > 1 && /^\d+$/.test(parts[1])) {
-          pids.push(parts[1]);
-        }
-      }
-    }
-
-    if (pids.length > 0) {
-      console.log(`🔧 Found blocking process(es): ${pids.join(', ')}`);
-      console.log('🔪 Killing blocking processes...');
-
-      for (const pid of pids) {
-        await executeCommand('sudo', ['kill', '-9', pid]);
-      }
-
-      console.log('🧹 Cleaning up stale lock files...');
-      await executeCommand('sudo', ['rm', '-f', '/var/lib/dpkg/lock-frontend']);
-      await executeCommand('sudo', ['rm', '-f', '/var/lib/dpkg/lock']);
-      await executeCommand('sudo', ['rm', '-f', '/var/cache/apt/archives/lock']);
-
-      console.log('✅ Lock files cleaned');
-
-      // Wait a moment for cleanup
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
+    throw new Error(
+      'Another package manager is running. Please wait for it to finish or run:\n' +
+      'sudo killall apt apt-get dpkg'
+    );
   }
 
   // Check for broken packages (skip header lines)
