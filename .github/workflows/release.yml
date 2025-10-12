@@ -33,6 +33,18 @@ jobs:
     - name: Install dependencies
       run: deno cache src/main.ts
 
+    - name: Generate version file
+      run: |
+        TAG_NAME=${GITHUB_REF#refs/tags/}
+        COMMIT_SHA=$(git rev-parse --short HEAD)
+        BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+        cat > src/version.ts <<EOF
+        export const VERSION = "$TAG_NAME";
+        export const COMMIT = "$COMMIT_SHA";
+        export const BUILD_DATE = "$BUILD_DATE";
+        EOF
+
     - name: Create dist directory
       run: mkdir -p dist
 
