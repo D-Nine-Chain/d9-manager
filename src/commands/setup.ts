@@ -234,9 +234,21 @@ async function installD9Node(messages: Messages, osInfo: { type: 'ubuntu' | 'deb
     'Running apt update...',
     executeCommand('sudo', ['apt', 'update', '-qq'])
   );
-  
+
   if (!updateResult.success) {
-    throw new Error('Failed to update package lists');
+    let errorMsg = 'Failed to update package lists';
+    if (updateResult.error) {
+      errorMsg += `\n\nError details: ${updateResult.error}`;
+    }
+    if (updateResult.output) {
+      errorMsg += `\n\nCommand output: ${updateResult.output}`;
+    }
+    errorMsg += '\n\nPossible causes:';
+    errorMsg += '\n- Running without sudo privileges';
+    errorMsg += '\n- Network connectivity issues';
+    errorMsg += '\n- Invalid repository sources in /etc/apt/sources.list';
+    errorMsg += '\n\nTry running: sudo apt update';
+    throw new Error(errorMsg);
   }
   console.log('✅ Package lists updated');
   
@@ -245,9 +257,22 @@ async function installD9Node(messages: Messages, osInfo: { type: 'ubuntu' | 'deb
     'Installing curl, jq, wget...',
     executeCommand('sudo', ['apt', 'install', '-y', '-qq', 'curl', 'jq', 'wget'])
   );
-  
+
   if (!installResult.success) {
-    throw new Error('Failed to install required packages');
+    let errorMsg = 'Failed to install required packages (curl, jq, wget)';
+    if (installResult.error) {
+      errorMsg += `\n\nError details: ${installResult.error}`;
+    }
+    if (installResult.output) {
+      errorMsg += `\n\nCommand output: ${installResult.output}`;
+    }
+    errorMsg += '\n\nPossible causes:';
+    errorMsg += '\n- Running without sudo privileges';
+    errorMsg += '\n- Another apt/dpkg process is running (check: sudo lsof /var/lib/dpkg/lock-frontend)';
+    errorMsg += '\n- Broken package state (try: sudo dpkg --configure -a)';
+    errorMsg += '\n- Network connectivity issues';
+    errorMsg += '\n\nTry running: sudo apt install -y curl jq wget';
+    throw new Error(errorMsg);
   }
   console.log('✅ Required packages installed');
   
