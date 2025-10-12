@@ -8,10 +8,10 @@ A comprehensive CLI tool for managing D9 blockchain nodes with zero-friction ins
 
 ### Linux (x86_64)
 ```bash
-curl -L https://github.com/D-Nine-Chain/d9-manager/releases/latest/download/d9-manager-linux-x64.gz | gunzip > d9-manager && chmod +x d9-manager
+curl -L https://github.com/D-Nine-Chain/d9-manager/releases/latest/download/d9-manager-linux-x64.gz | gunzip > d9-manager && chmod +x d9-manager && sudo mv d9-manager /usr/local/bin/
 ```
 
-Then simply run:
+Then simply run from anywhere:
 ```bash
 d9-manager
 ```
@@ -113,14 +113,23 @@ d9-manager
 
 ### Common Issues
 
-1. **Binary not found**:
+1. **Broken package state during installation**:
+   ```bash
+   # If you see "dpkg was interrupted" errors
+   # Download and run the recovery script
+   curl -L https://raw.githubusercontent.com/D-Nine-Chain/d9-manager/main/scripts/fix-broken-packages.sh | sudo bash
+
+   # Or see RECOVERY.md for detailed instructions
+   ```
+
+2. **Binary not found**:
    ```bash
    # Check if D9 binary exists
    which d9-node
    ls -la /usr/local/bin/d9-node
    ```
 
-2. **Service not starting**:
+3. **Service not starting**:
    ```bash
    # Check service logs
    journalctl -u d9-node.service -n 50
@@ -129,13 +138,13 @@ d9-manager
    sudo systemctl status d9-node.service
    ```
 
-3. **Key errors**:
+4. **Key errors**:
    ```bash
    # Check keystore directory
    ls -la /home/ubuntu/node-data/chains/d9_main/keystore/
    ```
 
-4. **Network connection issues**:
+5. **Network connection issues**:
    - Ensure port 40100 is not blocked
    - Check firewall settings
    - Verify internet connectivity
@@ -167,13 +176,16 @@ d9-manager/
 │   ├── utils/
 │   │   ├── system.ts        # System utilities
 │   │   ├── keystore.ts      # Keystore management
-│   │   └── polkadot.ts      # Blockchain interaction
+│   │   ├── polkadot.ts      # Blockchain interaction
+│   │   └── balance.ts       # Balance checking
 │   └── commands/
 │       ├── setup.ts         # Node setup commands
 │       ├── candidacy.ts     # Validator candidacy
 │       └── convert.ts       # Node conversion
+├── scripts/
+│   └── fix-broken-packages.sh  # Package recovery script
 ├── deno.json                # Deno configuration
-├── install.sh               # Installation script
+├── RECOVERY.md              # Package recovery guide
 └── README.md                # This file
 ```
 
