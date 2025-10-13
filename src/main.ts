@@ -52,9 +52,9 @@ async function main() {
 	console.log("═".repeat(50));
 
 	// Check for resumable installation
-	const canResume = await hasResumableInstallation();
+	const canResume = await hasResumableInstallation(messages);
 	if (canResume) {
-		const shouldResume = await promptResume();
+		const shouldResume = await promptResume(messages);
 		if (shouldResume) {
 			// Note: Resume functionality would go here
 			// For now, we just show the state and continue
@@ -174,10 +174,10 @@ async function main() {
 					await showNodeStatus();
 					break;
 				case "show-state":
-					await showInstallationState();
+					await showInstallationState(messages);
 					break;
 				case "clear-state":
-					await clearAbandonedInstallation();
+					await clearAbandonedInstallation(messages);
 					break;
 				case "exit":
 					continueLoop = false;

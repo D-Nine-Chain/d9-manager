@@ -7,12 +7,13 @@
 
 import { InstallationStateManager } from '../core/state-manager.ts';
 import { Confirm } from '@cliffy/prompt';
+import { Messages } from '../types.ts';
 
 /**
  * Check if there's a resumable installation
  */
-export async function hasResumableInstallation(): Promise<boolean> {
-  const stateManager = new InstallationStateManager();
+export async function hasResumableInstallation(messages: Messages): Promise<boolean> {
+  const stateManager = new InstallationStateManager(messages);
   const state = await stateManager.loadState();
 
   if (!state) {
@@ -25,8 +26,8 @@ export async function hasResumableInstallation(): Promise<boolean> {
 /**
  * Display resumable installation info and prompt user
  */
-export async function promptResume(): Promise<boolean> {
-  const stateManager = new InstallationStateManager();
+export async function promptResume(messages: Messages): Promise<boolean> {
+  const stateManager = new InstallationStateManager(messages);
   const state = await stateManager.loadState();
 
   if (!state) {
@@ -51,8 +52,8 @@ export async function promptResume(): Promise<boolean> {
 /**
  * Clear abandoned installation state
  */
-export async function clearAbandonedInstallation(): Promise<void> {
-  const stateManager = new InstallationStateManager();
+export async function clearAbandonedInstallation(messages: Messages): Promise<void> {
+  const stateManager = new InstallationStateManager(messages);
   const state = await stateManager.loadState();
 
   if (!state) {
@@ -79,8 +80,8 @@ export async function clearAbandonedInstallation(): Promise<void> {
 /**
  * Display installation state information
  */
-export async function showInstallationState(): Promise<void> {
-  const stateManager = new InstallationStateManager();
+export async function showInstallationState(messages: Messages): Promise<void> {
+  const stateManager = new InstallationStateManager(messages);
   const state = await stateManager.loadState();
 
   if (!state) {

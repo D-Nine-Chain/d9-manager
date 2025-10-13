@@ -9,14 +9,16 @@ import { insertKeySecurely, auditKeyOperation } from '../utils/secure-keys.ts';
 import { executeCommand } from '../utils/system.ts';
 import { PATHS } from '../config/constants.ts';
 import { Confirm, Input, Select } from '@cliffy/prompt';
+import { Messages } from '../types.ts';
 
 /**
  * Polkadot.js-based key generator implementation
  */
 export class PolkadotKeyGenerator implements KeyGenerator {
+  constructor(private readonly messages: Messages) {}
   async generateStandard(basePath: string, serviceUser: string): Promise<void> {
     // Generate seed phrase using d9-node
-    console.log('\n🔑 Generating seed phrase...');
+    console.log(this.messages.keyGeneration.generatingSeedPhrase);
 
     let seedResult = await executeCommand(PATHS.BINARY, [
       'key',
@@ -40,9 +42,9 @@ export class PolkadotKeyGenerator implements KeyGenerator {
     const seedPhrase = seedMatch[1].trim();
 
     // Display seed to user
-    console.log('\n🔑 IMPORTANT - Save this seed phrase:');
-    console.log(`"${seedPhrase}"`);
-    console.log('Press Enter when you have saved it...');
+    console.log(this.messages.keyGeneration.importantSavePhrase);
+    console.log(this.messages.keyGeneration.seedPhraseLabel.replace('%s', seedPhrase));
+    console.log(this.messages.keyGeneration.pressEnterWhenSaved);
     await this.prompt('');
 
     // Insert keys securely
@@ -50,10 +52,8 @@ export class PolkadotKeyGenerator implements KeyGenerator {
   }
 
   async generateAdvanced(basePath: string, serviceUser: string): Promise<void> {
-    console.log('\n🔐 Advanced Key Generation Mode');
-    console.log(
-      'This mode uses hierarchical deterministic key derivation for enhanced security.\n'
-    );
+    console.log(this.messages.keyGeneration.advancedModeTitle);
+    console.log(this.messages.keyGeneration.advancedModeDesc);
 
     // Get password
     const password = await this.getSecurePassword();
@@ -77,7 +77,17 @@ export class PolkadotKeyGenerator implements KeyGenerator {
     basePath: string,
     serviceUser: string
   ): Promise<void> {
-    console.log('\n🔐 Securely inserting keys into keystore...');
+    console.log(this.messages.keyGeneration.securingKeys);
+
+    // Display SURI explanation
+    console.log(this.messages.setup.suriExplanationTitle);
+    console.log(this.messages.setup.suriExplanationDesc);
+    console.log(this.messages.setup.suriFormatLabel);
+    console.log(this.messages.setup.suriExampleBase);
+    console.log(this.messages.setup.suriExampleDerived);
+    console.log(this.messages.setup.suriExampleAdvanced);
+    console.log(this.messages.setup.suriAutoProvided);
+    console.log('');
 
     const keyConfigs = [
       { keyType: 'aura', suri: seedPhrase, scheme: 'Sr25519' as const },
@@ -91,7 +101,7 @@ export class PolkadotKeyGenerator implements KeyGenerator {
     ];
 
     for (const config of keyConfigs) {
-      console.log(`  Inserting ${config.keyType} key...`);
+      console.log(this.messages.setup.insertingKeyType.replace('%s', config.keyType));
 
       const success = await insertKeySecurely({
         basePath,
@@ -111,7 +121,7 @@ export class PolkadotKeyGenerator implements KeyGenerator {
         throw new Error(`Failed to insert ${config.keyType} key securely`);
       }
 
-      console.log(`  ✅ ${config.keyType} key inserted`);
+      console.log(this.messages.keyGeneration.keyInserted.replace('%s', config.keyType));
     }
   }
 
@@ -123,7 +133,16 @@ export class PolkadotKeyGenerator implements KeyGenerator {
     basePath: string,
     serviceUser: string
   ): Promise<void> {
-    console.log('\n🔧 Deriving session keys from root...');
+    console.log(this.messages.keyGeneration.derivingKeys);
+
+    // Display hierarchical derivation explanation
+    console.log(this.messages.setup.suriHierarchicalTitle);
+    console.log(this.messages.setup.suriHierarchicalDesc);
+    console.log(this.messages.setup.suriHierarchicalFormat);
+    console.log(this.messages.setup.suriHierarchicalExample1);
+    console.log(this.messages.setup.suriHierarchicalExample2);
+    console.log(this.messages.setup.suriHierarchicalNote);
+    console.log('');
 
     const keyConfigs = [
       { type: 'aura', path: '//aura//0', scheme: 'Sr25519' as const },
@@ -133,7 +152,7 @@ export class PolkadotKeyGenerator implements KeyGenerator {
     ];
 
     for (const config of keyConfigs) {
-      console.log(`Currently deriving ${config.type} service key...`);
+      console.log(this.messages.keyGeneration.currentlyDeriving.replace('%s', config.type));
 
       const derivedSuri = `${rootMnemonic}${config.path}`;
 
@@ -162,23 +181,23 @@ export class PolkadotKeyGenerator implements KeyGenerator {
    * Get secure password from user
    */
   private async getSecurePassword(): Promise<string> {
-    console.log('🔒 Creating secure password for key derivation');
+    console.log(this.messages.keyGeneration.creatingPassword);
 
     let password1: string;
     let password2: string;
 
     do {
       password1 = await Input.prompt({
-        message: 'Enter password for key derivation:',
+        message: this.messages.keyGeneration.enterPassword,
         minLength: 8,
       });
 
       password2 = await Input.prompt({
-        message: 'Confirm password:',
+        message: this.messages.keyGeneration.confirmPassword,
       });
 
       if (password1 !== password2) {
-        console.log('❌ Passwords do not match. Please try again.\n');
+        console.log(this.messages.keyGeneration.passwordMismatch);
       }
     } while (password1 !== password2);
 
@@ -189,7 +208,7 @@ export class PolkadotKeyGenerator implements KeyGenerator {
    * Generate root mnemonic
    */
   private async generateRootMnemonic(_password: string): Promise<string> {
-    console.log('\n🌱 Generating root mnemonic...');
+    console.log(this.messages.keyGeneration.generatingRootMnemonic);
 
     const seedResult = await executeCommand(PATHS.BINARY, ['key', 'generate']);
     if (!seedResult.success) {
@@ -208,38 +227,38 @@ export class PolkadotKeyGenerator implements KeyGenerator {
    * Confirm root mnemonic with user
    */
   private async confirmRootMnemonic(rootMnemonic: string): Promise<void> {
-    console.log('\n🚨 CRITICAL SECURITY INFORMATION');
+    console.log(this.messages.keyGeneration.criticalSecurityTitle);
     console.log('═'.repeat(60));
-    console.log('Your ROOT MNEMONIC:');
+    console.log(this.messages.keyGeneration.rootMnemonicLabel);
     console.log(`"${rootMnemonic}"`);
     console.log('═'.repeat(60));
-    console.log('⚠️  This root key will NOT be stored locally on this machine.');
-    console.log('⚠️  If you lose this mnemonic, you will lose access to your validator.');
-    console.log('⚠️  Write it down and store it in a secure location.');
+    console.log(this.messages.keyGeneration.rootNotStoredWarning1);
+    console.log(this.messages.keyGeneration.rootNotStoredWarning2);
+    console.log(this.messages.keyGeneration.rootNotStoredWarning3);
     console.log('═'.repeat(60) + '\n');
 
     const understood = await Confirm.prompt(
-      'Do you understand that this root mnemonic will NOT be stored locally?'
+      this.messages.keyGeneration.understandPrompt
     );
 
     if (!understood) {
-      throw new Error('User must acknowledge security requirements');
+      throw new Error(this.messages.keyGeneration.mustAcknowledge);
     }
 
-    console.log('\n🔴 SECOND CONFIRMATION REQUIRED');
-    console.log('The root mnemonic will NOT be stored locally.');
-    console.log('You must save it yourself or lose access forever.');
+    console.log(this.messages.keyGeneration.secondConfirmTitle);
+    console.log(this.messages.keyGeneration.rootNotStoredLocalWarning);
+    console.log(this.messages.keyGeneration.mustSaveWarning);
 
     const confirmation = await Select.prompt({
-      message: 'Type "1" to confirm you understand:',
+      message: this.messages.keyGeneration.confirmOptions,
       options: [
-        { name: '1 - I understand and have saved the mnemonic', value: true },
-        { name: '0 - Cancel setup', value: false },
+        { name: this.messages.keyGeneration.optionUnderstand, value: true },
+        { name: this.messages.keyGeneration.optionCancel, value: false },
       ],
     });
 
     if (!confirmation) {
-      throw new Error('Setup cancelled by user');
+      throw new Error(this.messages.keyGeneration.setupCancelled);
     }
   }
 
@@ -247,7 +266,7 @@ export class PolkadotKeyGenerator implements KeyGenerator {
    * Verify mnemonic backup
    */
   private async verifyMnemonicBackup(rootMnemonic: string): Promise<void> {
-    console.log('\n🔍 Verifying your mnemonic backup...');
+    console.log(this.messages.keyGeneration.verifyingBackup);
 
     const words = rootMnemonic.split(' ');
     const totalWords = words.length;
@@ -262,21 +281,23 @@ export class PolkadotKeyGenerator implements KeyGenerator {
     }
     positions.sort((a, b) => a - b);
 
-    console.log(`Please provide words ${positions.join(', ')} from your mnemonic:`);
+    console.log(this.messages.keyGeneration.provideWordsPrompt.replace('%s', positions.join(', ')));
 
     for (const pos of positions) {
       await Input.prompt({
-        message: `Word ${pos}:`,
+        message: this.messages.keyGeneration.wordNumberPrompt.replace('%s', pos.toString()),
         validate: (input) => {
           if (input.trim().toLowerCase() === words[pos - 1].toLowerCase()) {
             return true;
           }
-          return `Incorrect! Expected word ${pos} but got "${input}"`;
+          return this.messages.keyGeneration.incorrectWordError
+            .replace('%s', pos.toString())
+            .replace('%s', input);
         },
       });
     }
 
-    console.log('✅ Mnemonic verification successful!');
+    console.log(this.messages.keyGeneration.verificationSuccess);
   }
 
   /**

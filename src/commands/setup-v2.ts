@@ -80,7 +80,7 @@ export async function setupNodeV2(messages: Messages): Promise<void> {
   await downloadAndInstallBinary(osInfo);
 
   // Step 10: Setup node using service layer
-  const service = createNodeSetupService();
+  const service = createNodeSetupService(messages);
 
   try {
     console.log('\n🚀 Starting node setup with transaction management...');
@@ -518,10 +518,11 @@ Pin-Priority: 900
 /**
  * Create node setup service with injected dependencies
  */
-function createNodeSetupService(): NodeSetupService {
+function createNodeSetupService(messages: Messages): NodeSetupService {
   return new NodeSetupService({
     packageManager: new AptPackageManager(),
     binaryDownloader: new WgetBinaryDownloader(),
-    keyGenerator: new PolkadotKeyGenerator(),
+    keyGenerator: new PolkadotKeyGenerator(messages),
+    messages: messages,
   });
 }

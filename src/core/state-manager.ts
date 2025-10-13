@@ -5,6 +5,8 @@
  * from the last successful step.
  */
 
+import { Messages } from '../types.ts';
+
 export interface InstallationStep {
 	id: string;
 	description: string;
@@ -52,7 +54,10 @@ const STATE_BACKUP_PATH = `${getConfigDir()}/state.backup.json`;
 export class InstallationStateManager {
 	private state: InstallationState | null = null;
 
-	constructor(private readonly statePath: string = STATE_FILE_PATH) {}
+	constructor(
+		private readonly messages: Messages,
+		private readonly statePath: string = STATE_FILE_PATH
+	) {}
 
 	/**
 	 * Initialize a new installation state
@@ -309,17 +314,17 @@ export class InstallationStateManager {
 	 */
 	displayProgress(): void {
 		if (!this.state) {
-			console.log('No installation in progress');
+			console.log(this.messages.progress.noInstallation);
 			return;
 		}
 
-		console.log('\n📊 Installation Progress');
+		console.log(this.messages.progress.title);
 		console.log('═'.repeat(50));
-		console.log(`Mode: ${this.state.mode}`);
-		console.log(`Node Type: ${this.state.nodeType}`);
-		console.log(`Started: ${new Date(this.state.startedAt).toLocaleString()}`);
-		console.log(`Progress: ${this.getProgress()}% (${this.getCompletedSteps().length}/${this.state.totalSteps} steps)`);
-		console.log('\nSteps:');
+		console.log(`${this.messages.progress.mode} ${this.state.mode}`);
+		console.log(`${this.messages.progress.nodeType} ${this.state.nodeType}`);
+		console.log(`${this.messages.progress.started} ${new Date(this.state.startedAt).toLocaleString()}`);
+		console.log(`${this.messages.progress.progressLabel} ${this.getProgress()}% (${this.getCompletedSteps().length}/${this.state.totalSteps} steps)`);
+		console.log(this.messages.progress.stepsLabel);
 
 		for (const step of this.state.steps) {
 			const icon =
@@ -335,7 +340,7 @@ export class InstallationStateManager {
 
 			console.log(`  ${icon} ${step.description}`);
 			if (step.error) {
-				console.log(`     Error: ${step.error}`);
+				console.log(`${this.messages.progress.errorLabel} ${step.error}`);
 			}
 		}
 

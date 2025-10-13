@@ -15,6 +15,7 @@ import {
   CreateServiceFileOperation,
   EnableServiceOperation,
 } from '../core/system-operations.ts';
+import { Messages } from '../types.ts';
 
 /**
  * Package manager abstraction
@@ -48,6 +49,7 @@ export interface NodeSetupServiceDependencies {
   packageManager: PackageManager;
   binaryDownloader: BinaryDownloader;
   keyGenerator: KeyGenerator;
+  messages: Messages;
 }
 
 /**
@@ -69,7 +71,7 @@ export class NodeSetupService {
     const operations = this.buildOperations(config);
 
     // Create transaction manager
-    const txManager = new TransactionManager();
+    const txManager = new TransactionManager(this.deps.messages);
 
     // Initialize transaction
     await txManager.initialize(operations, {
