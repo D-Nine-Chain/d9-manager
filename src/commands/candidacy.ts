@@ -4,6 +4,7 @@ import { getD9API } from '../utils/polkadot.ts';
 import { getNodeAddress } from '../utils/keystore.ts';
 import { createProgressBar } from '../utils/system.ts';
 import { checkBalanceWithPrompt } from '../utils/balance.ts';
+import { PATHS, SERVICE } from '../config/constants.ts';
 
 export async function submitCandidacy(messages: Messages): Promise<void> {
   console.log('\n' + messages.submitCandidacy);
@@ -111,7 +112,7 @@ export async function submitCandidacy(messages: Messages): Promise<void> {
 async function checkValidatorConfiguration(): Promise<boolean> {
   try {
     // Check if service file has validator flag
-    const serviceContent = await Deno.readTextFile('/etc/systemd/system/d9-node.service');
+    const serviceContent = await Deno.readTextFile(PATHS.SERVICE_FILE);
     return serviceContent.includes('--validator');
   } catch {
     return false;
@@ -120,11 +121,11 @@ async function checkValidatorConfiguration(): Promise<boolean> {
 
 async function convertToValidator(): Promise<void> {
   await createProgressBar(2000, 'Converting to validator node...');
-  
+
   try {
     // Stop the service
-    const stopResult = await new Deno.Command('sudo', { 
-      args: ['systemctl', 'stop', 'd9-node.service']
+    const stopResult = await new Deno.Command('sudo', {
+      args: ['systemctl', 'stop', SERVICE.NAME]
     }).output();
 
     if (stopResult.code !== 0) {
@@ -132,8 +133,8 @@ async function convertToValidator(): Promise<void> {
     }
 
     // Read current service file
-    const serviceContent = await Deno.readTextFile('/etc/systemd/system/d9-node.service');
-    
+    const serviceContent = await Deno.readTextFile(PATHS.SERVICE_FILE);
+
     // Remove any RPC/WebSocket flags and add validator flag
     let newServiceContent = serviceContent
       .replace(/\s*--ws-external\s*\\?\s*/g, ' ')
@@ -144,15 +145,16 @@ async function convertToValidator(): Promise<void> {
     // Add validator flag if not present
     if (!newServiceContent.includes('--validator')) {
       newServiceContent = newServiceContent.replace(
-        '--port 40100',
-        '--port 40100 \\\n  --validator'
+        `--port ${SERVICE.PORT}`,
+        `--port ${SERVICE.PORT} \\\n  --validator`
       );
     }
 
     // Write updated service file
-    await Deno.writeTextFile('/tmp/d9-node.service', newServiceContent);
+    const tempServiceFile = '/tmp/d9-node.service';
+    await Deno.writeTextFile(tempServiceFile, newServiceContent);
     const moveResult = await new Deno.Command('sudo', {
-      args: ['mv', '/tmp/d9-node.service', '/etc/systemd/system/d9-node.service']
+      args: ['mv', tempServiceFile, PATHS.SERVICE_FILE]
     }).output();
 
     if (moveResult.code !== 0) {
@@ -161,9 +163,9 @@ async function convertToValidator(): Promise<void> {
 
     // Reload systemd and start service
     await new Deno.Command('sudo', { args: ['systemctl', 'daemon-reload'] }).output();
-    
+
     const startResult = await new Deno.Command('sudo', {
-      args: ['systemctl', 'start', 'd9-node.service']
+      args: ['systemctl', 'start', SERVICE.NAME]
     }).output();
 
     if (startResult.code !== 0) {
@@ -171,10 +173,10 @@ async function convertToValidator(): Promise<void> {
     }
 
     console.log('✅ Node converted to validator configuration');
-    
+
     // Wait a moment for the node to start
     await new Promise(resolve => setTimeout(resolve, 3000));
-    
+
   } catch (error) {
     console.log(`❌ Failed to convert node: ${error instanceof Error ? error.message : String(error)}`);
     throw error;

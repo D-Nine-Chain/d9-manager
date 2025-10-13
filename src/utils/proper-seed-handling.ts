@@ -1,6 +1,7 @@
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady, mnemonicGenerate, mnemonicToMiniSecret, naclKeypairFromSeed, schnorrkelKeypairFromSeed } from '@polkadot/util-crypto';
 import { u8aToHex, hexToU8a } from '@polkadot/util';
+import { ALL_KEY_TYPES, PATHS, buildKeystorePath } from '../config/constants.ts';
 
 /**
  * Proper seed/private key handling for Polkadot.js
@@ -74,12 +75,11 @@ export async function properSeedHandling() {
 
   console.log('\n=== Correct Pattern for Key Storage ===');
   const correctKeyStorage = async (mnemonic: string, basePath: string) => {
-    const keyConfigs = [
-      { type: 'aura', keyType: '61757261', scheme: 'Sr25519' },
-      { type: 'gran', keyType: '6772616e', scheme: 'Ed25519' },
-      { type: 'imon', keyType: '696d6f6e', scheme: 'Sr25519' },
-      { type: 'audi', keyType: '61756469', scheme: 'Sr25519' }
-    ];
+    const keyConfigs = ALL_KEY_TYPES.map(kt => ({
+      type: kt.type,
+      keyType: kt.prefix,
+      scheme: kt.scheme
+    }));
 
     for (const config of keyConfigs) {
       // Option 1: Use the node's key insert command with full SURI
@@ -92,7 +92,7 @@ export async function properSeedHandling() {
     }
   };
 
-  await correctKeyStorage(mnemonic, '/var/lib/d9-node');
+  await correctKeyStorage(mnemonic, PATHS.DATA_DIR_NEW);
 
   console.log('\n=== The Problem with the Current Code ===');
   console.log('The current setup.ts code tries to do this:');
@@ -130,7 +130,7 @@ export async function properSeedHandling() {
 export async function generateKeystoreFiles(mnemonic: string, basePath: string) {
   await cryptoWaitReady();
   
-  const keystorePath = `${basePath}/chains/d9_main/keystore`;
+  const keystorePath = buildKeystorePath(basePath);
   
   // Generate a temporary random key for each service
   // This is what should be stored in the keystore files
@@ -157,7 +157,7 @@ export async function generateKeystoreFiles(mnemonic: string, basePath: string) 
   };
   
   // Example usage
-  const auraKey = generateServiceKey('61757261', 'sr25519');
+  const auraKey = generateServiceKey(ALL_KEY_TYPES[0].prefix, 'sr25519'); // Use AURA key type
   console.log('Generated Aura key:');
   console.log('- File:', `${keystorePath}/${auraKey.filename}`);
   console.log('- Content:', auraKey.content);

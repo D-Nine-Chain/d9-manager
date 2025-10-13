@@ -1,6 +1,7 @@
 import { Select, Confirm } from '@cliffy/prompt';
 import { NodeType, Messages } from '../types.ts';
 import { checkDiskSpace, createProgressBar, systemctl, executeCommand } from '../utils/system.ts';
+import { PATHS, SERVICE } from '../config/constants.ts';
 
 export async function convertNode(messages: Messages): Promise<void> {
   console.log('\n' + messages.convertNode);
@@ -71,7 +72,7 @@ export async function convertNode(messages: Messages): Promise<void> {
     
     console.log(`✅ ${messages.progress.complete}`);
     console.log('\n📊 Node has been converted successfully!');
-    console.log('🔍 Check status: journalctl -u d9-node.service -f');
+    console.log(`🔍 Check status: journalctl -u ${SERVICE.NAME} -f`);
     
   } catch (error) {
     console.log(`❌ Conversion failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -86,11 +87,11 @@ interface NodeConfiguration {
 
 async function getCurrentNodeConfiguration(): Promise<NodeConfiguration> {
   try {
-    const serviceContent = await Deno.readTextFile('/etc/systemd/system/d9-node.service');
-    
+    const serviceContent = await Deno.readTextFile(PATHS.SERVICE_FILE);
+
     const isValidator = serviceContent.includes('--validator');
     const isArchive = serviceContent.includes('--pruning archive');
-    
+
     let type: NodeType;
     if (isValidator) {
       type = NodeType.VALIDATOR;
@@ -99,7 +100,7 @@ async function getCurrentNodeConfiguration(): Promise<NodeConfiguration> {
     } else {
       type = NodeType.FULL;
     }
-    
+
     return { type, isValidator, isArchive };
   } catch {
     // Default if service file doesn't exist
@@ -109,9 +110,9 @@ async function getCurrentNodeConfiguration(): Promise<NodeConfiguration> {
 
 async function performConversion(nodeType: NodeType, messages: Messages): Promise<void> {
   await createProgressBar(1000, 'Stopping node...');
-  
+
   // Stop the service
-  const stopped = await systemctl('stop', 'd9-node.service');
+  const stopped = await systemctl('stop', SERVICE.NAME);
   if (!stopped) {
     throw new Error('Failed to stop node service');
   }
@@ -121,28 +122,50 @@ async function performConversion(nodeType: NodeType, messages: Messages): Promis
   // Read current service configuration
   let serviceContent: string;
   try {
-    serviceContent = await Deno.readTextFile('/etc/systemd/system/d9-node.service');
+    serviceContent = await Deno.readTextFile(PATHS.SERVICE_FILE);
   } catch {
     throw new Error('Service file not found. Please run setup first.');
   }
 
-  // Extract node name from current config
+  // Extract existing configuration values to preserve installation mode
   const nameMatch = serviceContent.match(/--name\s+"([^"]+)"/);
   const nodeName = nameMatch ? nameMatch[1] : 'D9-Node';
 
-  // Create new service configuration
+  const userMatch = serviceContent.match(/User=([^\s]+)/);
+  const serviceUser = userMatch ? userMatch[1] : SERVICE.USER;
+
+  const basePathMatch = serviceContent.match(/--base-path\s+([^\s\\]+)/);
+  const basePath = basePathMatch ? basePathMatch[1] : PATHS.DATA_DIR_NEW;
+
+  const workingDirMatch = serviceContent.match(/WorkingDirectory=([^\s]+)/);
+  const workingDir = workingDirMatch ? workingDirMatch[1] : undefined;
+
+  const groupMatch = serviceContent.match(/Group=([^\s]+)/);
+  const serviceGroup = groupMatch ? groupMatch[1] : undefined;
+
+  // Create new service configuration preserving the installation mode
   let newServiceContent = `[Unit]
 Description=D9 Node
 After=network.target
 
 [Service]
 Type=simple
-User=ubuntu
-ExecStart=/usr/local/bin/d9-node \\
-  --base-path /home/ubuntu/node-data \\
-  --chain /usr/local/bin/new-main-spec.json \\
+User=${serviceUser}`;
+
+  if (serviceGroup) {
+    newServiceContent += `\nGroup=${serviceGroup}`;
+  }
+
+  if (workingDir) {
+    newServiceContent += `\nWorkingDirectory=${workingDir}`;
+  }
+
+  newServiceContent += `
+ExecStart=${PATHS.BINARY} \\
+  --base-path ${basePath} \\
+  --chain ${PATHS.CHAIN_SPEC} \\
   --name "${nodeName}" \\
-  --port 40100`;
+  --port ${SERVICE.PORT}`;
 
   // Add type-specific flags
   switch (nodeType) {
@@ -165,9 +188,10 @@ WantedBy=multi-user.target
 `;
 
   // Write new service file
-  await Deno.writeTextFile('/tmp/d9-node.service', newServiceContent);
-  const moveResult = await executeCommand('sudo', ['mv', '/tmp/d9-node.service', '/etc/systemd/system/d9-node.service']);
-  
+  const tempServiceFile = '/tmp/d9-node.service';
+  await Deno.writeTextFile(tempServiceFile, newServiceContent);
+  const moveResult = await executeCommand('sudo', ['mv', tempServiceFile, PATHS.SERVICE_FILE]);
+
   if (!moveResult.success) {
     throw new Error('Failed to update service configuration');
   }
@@ -181,17 +205,17 @@ WantedBy=multi-user.target
   await createProgressBar(1000, 'Starting node...');
 
   // Start the service
-  const started = await systemctl('start', 'd9-node.service');
+  const started = await systemctl('start', SERVICE.NAME);
   if (!started) {
     throw new Error('Failed to start node service');
   }
 
   // Verify service is running
   await new Promise(resolve => setTimeout(resolve, 3000));
-  
-  const statusResult = await executeCommand('sudo', ['systemctl', 'is-active', 'd9-node.service']);
+
+  const statusResult = await executeCommand('sudo', ['systemctl', 'is-active', SERVICE.NAME]);
   if (!statusResult.success || !statusResult.output.includes('active')) {
     console.log('⚠️  Service may not be running properly. Check logs:');
-    console.log('journalctl -u d9-node.service -n 20');
+    console.log(`journalctl -u ${SERVICE.NAME} -n 20`);
   }
 }

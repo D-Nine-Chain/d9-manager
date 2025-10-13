@@ -1,9 +1,8 @@
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Keyring } from '@polkadot/keyring';
 import { NodeMetadataStruct } from '../types.ts';
-import { readKeystoreInfo } from './keystore.ts';
-
-const WS_ENDPOINT = 'wss://mainnet.d9network.com:40300';
+import { readKeystoreInfo, findKeystorePath } from './keystore.ts';
+import { NETWORK, KEY_TYPES } from '../config/constants.ts';
 
 class D9ChainAPI {
   private api: ApiPromise | null = null;
@@ -20,7 +19,7 @@ class D9ChainAPI {
     }
 
     try {
-      const provider = new WsProvider(WS_ENDPOINT);
+      const provider = new WsProvider(NETWORK.ENDPOINT);
       this.api = await ApiPromise.create({ provider });
       await this.api.isReady;
     } catch (error) {
@@ -42,11 +41,15 @@ class D9ChainAPI {
         return { success: false, error: 'No valid keystore found' };
       }
 
-      // Get the secret key for signing
-      const keystorePath = '/home/ubuntu/node-data/chains/d9_main/keystore';
+      // Get the secret key for signing - use the same path resolution as readKeystoreInfo
+      const keystorePath = await findKeystorePath({ verbose: false });
+      if (!keystorePath) {
+        return { success: false, error: 'Keystore directory not found' };
+      }
+
       const files = [];
       for await (const dirEntry of Deno.readDir(keystorePath)) {
-        if (dirEntry.isFile && dirEntry.name.startsWith('61757261')) {
+        if (dirEntry.isFile && dirEntry.name.startsWith(KEY_TYPES.AURA.prefix)) {
           files.push(dirEntry.name);
         }
       }
@@ -57,24 +60,24 @@ class D9ChainAPI {
 
       const keyFilePath = `${keystorePath}/${files[0]}`;
       let keyData = await Deno.readTextFile(keyFilePath);
-      
+
       // Remove quotes if present (key files often have quotes around the actual key)
       keyData = keyData.trim();
-      if ((keyData.startsWith('"') && keyData.endsWith('"')) || 
+      if ((keyData.startsWith('"') && keyData.endsWith('"')) ||
           (keyData.startsWith("'") && keyData.endsWith("'"))) {
         keyData = keyData.slice(1, -1);
       }
 
       this.keyPair = this.keyring.addFromUri(keyData);
-      
-      return { 
-        success: true, 
-        address: `Dn${this.keyPair.address}` 
+
+      return {
+        success: true,
+        address: `Dn${this.keyPair.address}`
       };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : String(error) 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
       };
     }
   }

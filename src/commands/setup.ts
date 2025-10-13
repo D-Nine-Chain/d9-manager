@@ -4,6 +4,9 @@ import { checkDiskSpace, executeCommand, createProgressBar, systemctl, showProgr
 import { encodeAddress } from '@polkadot/util-crypto';
 import { randomBytes, pbkdf2, createHash } from 'node:crypto';
 import { promisify } from 'node:util';
+import { PATHS, SERVICE, ALL_KEY_TYPES, DERIVATION_PATHS, URLS } from '../config/constants.ts';
+import { buildKeystorePath } from '../utils/keystore.ts';
+import { insertKeySecurely, auditKeyOperation } from '../utils/secure-keys.ts';
 
 const pbkdf2Async = promisify(pbkdf2);
 
@@ -652,29 +655,39 @@ async function generateStandardKeys(basePath: string, baseUser: string): Promise
   console.log('Press Enter when you have saved it...');
   await prompt('');
 
-  // Insert standard keys
-  const keyInsertCommands = [
-    ['aura', seedPhrase],
-    ['gran', `${seedPhrase}//grandpa`],
-    ['imon', `${seedPhrase}//im_online`],
-    ['audi', `${seedPhrase}//authority_discovery`]
+  // Insert standard keys using secure method (stdin instead of CLI args)
+  console.log('\n🔐 Securely inserting keys into keystore...');
+
+  const keyInsertConfigs = [
+    { keyType: 'aura', suri: seedPhrase, scheme: 'Sr25519' as const },
+    { keyType: 'gran', suri: `${seedPhrase}//grandpa`, scheme: 'Ed25519' as const },
+    { keyType: 'imon', suri: `${seedPhrase}//im_online`, scheme: 'Sr25519' as const },
+    { keyType: 'audi', suri: `${seedPhrase}//authority_discovery`, scheme: 'Sr25519' as const }
   ];
 
-  for (const [keyType, suri] of keyInsertCommands) {
-    const scheme = keyType === 'gran' ? 'Ed25519' : 'Sr25519';
-    const insertCommand = baseUser === 'd9-node' 
-      ? ['sudo', '-u', 'd9-node', '/usr/local/bin/d9-node']
-      : ['/usr/local/bin/d9-node'];
-    
-    await executeCommand(insertCommand[0], [
-      ...insertCommand.slice(1),
-      'key', 'insert',
-      '--base-path', basePath,
-      '--chain', '/usr/local/bin/new-main-spec.json',
-      '--scheme', scheme,
-      '--suri', suri,
-      '--key-type', keyType
-    ]);
+  for (const config of keyInsertConfigs) {
+    console.log(`  Inserting ${config.keyType} key...`);
+
+    const success = await insertKeySecurely({
+      basePath,
+      chainSpec: PATHS.CHAIN_SPEC,
+      keyType: config.keyType,
+      scheme: config.scheme,
+      suri: config.suri,
+      serviceUser: baseUser === 'd9-node' ? 'd9-node' : undefined
+    });
+
+    // Audit log (without exposing key material)
+    await auditKeyOperation('insert', config.keyType, success, {
+      mode: 'standard',
+      user: baseUser
+    });
+
+    if (!success) {
+      throw new Error(`Failed to insert ${config.keyType} key securely`);
+    }
+
+    console.log(`  ✅ ${config.keyType} key inserted`);
   }
 }
 
@@ -841,42 +854,53 @@ async function generateSessionKeys(rootMnemonic: string, password: string, baseP
   
   for (const config of keyConfigs) {
     console.log(`Currently deriving ${config.type} service key...`);
-    
+
     const derivedSuri = `${rootMnemonic}${config.path}`;
-    
-    // Insert the derived key
-    const insertCommand = baseUser === 'd9-node' 
-      ? ['sudo', '-u', 'd9-node', '/usr/local/bin/d9-node']
-      : ['/usr/local/bin/d9-node'];
-    
-    await executeCommand(insertCommand[0], [
-      ...insertCommand.slice(1),
-      'key', 'insert',
-      '--base-path', basePath,
-      '--chain', '/usr/local/bin/new-main-spec.json',
-      '--scheme', config.scheme,
-      '--suri', derivedSuri,
-      '--key-type', config.type
-    ]);
-    
+
+    // Insert the derived key using secure method (stdin instead of CLI args)
+    const insertSuccess = await insertKeySecurely({
+      basePath,
+      chainSpec: PATHS.CHAIN_SPEC,
+      keyType: config.type,
+      scheme: config.scheme as 'Sr25519' | 'Ed25519',
+      suri: derivedSuri,
+      serviceUser: baseUser === 'd9-node' ? 'd9-node' : undefined
+    });
+
+    // Audit log (without exposing key material)
+    await auditKeyOperation('insert', config.type, insertSuccess, {
+      mode: 'advanced',
+      user: baseUser,
+      derivationPath: config.path
+    });
+
+    if (!insertSuccess) {
+      throw new Error(`Failed to insert ${config.type} key securely`);
+    }
+
     // Get public key for display
-    const inspectResult = await executeCommand('/usr/local/bin/d9-node', [
+    const inspectResult = await executeCommand(PATHS.BINARY, [
       'key', 'inspect', '--scheme', config.scheme, derivedSuri
     ]);
-    
+
     if (inspectResult.success) {
       const pubKeyMatch = inspectResult.output.match(/Public key \(hex\):\s+(0x[a-fA-F0-9]+)/);
       const ssMatch = inspectResult.output.match(/SS58 Address:\s+([a-zA-Z0-9]+)/);
-      
+
       if (pubKeyMatch && ssMatch) {
-        const keyName = config.type === 'gran' ? 'grandpa' : 
-                       config.type === 'imon' ? 'imOnline' : 
+        const keyName = config.type === 'gran' ? 'grandpa' :
+                       config.type === 'imon' ? 'imOnline' :
                        config.type === 'audi' ? 'authorityDiscovery' : config.type;
-        
+
         sessionKeys[keyName as keyof typeof sessionKeys] = {
           publicKey: pubKeyMatch[1],
           address: `Dn${ssMatch[1]}`
         };
+
+        // Audit log for successful key generation
+        await auditKeyOperation('inspect', config.type, true, {
+          address: `Dn${ssMatch[1]}`
+        });
       }
     }
   }
