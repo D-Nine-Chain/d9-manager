@@ -32,8 +32,19 @@ export interface InstallationState {
 	metadata: Record<string, unknown>;
 }
 
-const STATE_FILE_PATH = '/var/lib/d9-manager/.installation-state.json';
-const STATE_BACKUP_PATH = '/var/lib/d9-manager/.installation-state.backup.json';
+/**
+ * Get XDG-compliant config directory for state files
+ */
+function getConfigDir(): string {
+	const home = Deno.env.get('HOME');
+	if (!home) {
+		throw new Error('HOME environment variable not set');
+	}
+	return `${home}/.config/d9-manager`;
+}
+
+const STATE_FILE_PATH = `${getConfigDir()}/state.json`;
+const STATE_BACKUP_PATH = `${getConfigDir()}/state.backup.json`;
 
 /**
  * Manages installation state persistence
@@ -100,7 +111,7 @@ export class InstallationStateManager {
 
 		try {
 			// Ensure directory exists
-			await Deno.mkdir('/var/lib/d9-manager', { recursive: true });
+			await Deno.mkdir(getConfigDir(), { recursive: true });
 
 			// Backup existing state
 			try {
