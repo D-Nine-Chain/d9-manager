@@ -1,6 +1,6 @@
 {
   "name": "d9-manager",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "exports": "./src/main.ts",
   "tasks": {
     "dev": "deno run --allow-all src/main.ts",
