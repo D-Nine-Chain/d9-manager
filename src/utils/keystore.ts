@@ -147,6 +147,9 @@ export async function readKeystoreInfo(): Promise<KeystoreInfo | null> {
 		if (keyData.startsWith("0x")) {
 			// Hex key - check for derivation path
 			secretKey = keyData;
+		} else if (/^[0-9a-fA-F]+$/.test(keyData)) {
+			// Raw hex string without 0x prefix (common in keystore files)
+			secretKey = "0x" + keyData;
 		} else if (keyData.includes(" ")) {
 			// Mnemonic - check for derivation path
 			const parts = keyData.split("//");
